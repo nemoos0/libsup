@@ -113,4 +113,31 @@ pub fn build(b: *std.Build) void {
             .root_module = combining_class_mod,
         }),
     ).step);
+
+    const quick_check_gen = b.addRunArtifact(
+        b.addExecutable(.{
+            .name = "quick_check_gen",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("gen/quick_check.zig"),
+                .target = b.graph.host,
+            }),
+        }),
+    );
+    const quick_check_table = quick_check_gen.addOutputFileArg("quick_check_table.zig");
+
+    const quick_check_mod = b.createModule(.{
+        .root_source_file = b.path("src/quick_check.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    quick_check_mod.addAnonymousImport("quick_check_table", .{
+        .root_source_file = quick_check_table,
+    });
+
+    test_step.dependOn(&b.addRunArtifact(
+        b.addTest(.{
+            .name = "quick_check_test",
+            .root_module = quick_check_mod,
+        }),
+    ).step);
 }
