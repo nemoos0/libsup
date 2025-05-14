@@ -32,4 +32,31 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run unit test");
     test_step.dependOn(&mod_test_run.step);
+
+    const decomposition_gen = b.addRunArtifact(
+        b.addExecutable(.{
+            .name = "decomposition_gen",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("gen/decomposition.zig"),
+                .target = b.graph.host,
+            }),
+        }),
+    );
+    const decomposition_table = decomposition_gen.addOutputFileArg("decomposition_table.zig");
+
+    const decomposition_mod = b.createModule(.{
+        .root_source_file = b.path("src/decomposition.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    decomposition_mod.addAnonymousImport("decomposition_table", .{
+        .root_source_file = decomposition_table,
+    });
+
+    test_step.dependOn(&b.addRunArtifact(
+        b.addTest(.{
+            .name = "decomposition_test",
+            .root_module = decomposition_mod,
+        }),
+    ).step);
 }

@@ -38,6 +38,11 @@ pub fn column(line: []const u8, index: usize) ?[]const u8 {
     return null;
 }
 
+pub fn columnAsCodepoint(line: []const u8, index: usize) !?u21 {
+    const slice = column(line, index) orelse return null;
+    return try fmt.parseInt(u21, slice, 16);
+}
+
 pub fn columnAsRange(line: []const u8, index: usize) !?Range {
     var range: Range = undefined;
     const slice = column(line, index) orelse return null;
