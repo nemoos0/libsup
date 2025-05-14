@@ -86,4 +86,31 @@ pub fn build(b: *std.Build) void {
             .root_module = composition_mod,
         }),
     ).step);
+
+    const combining_class_gen = b.addRunArtifact(
+        b.addExecutable(.{
+            .name = "combining_class_gen",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("gen/combining_class.zig"),
+                .target = b.graph.host,
+            }),
+        }),
+    );
+    const combining_class_table = combining_class_gen.addOutputFileArg("combining_class_table.zig");
+
+    const combining_class_mod = b.createModule(.{
+        .root_source_file = b.path("src/combining_class.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    combining_class_mod.addAnonymousImport("combining_class_table", .{
+        .root_source_file = combining_class_table,
+    });
+
+    test_step.dependOn(&b.addRunArtifact(
+        b.addTest(.{
+            .name = "combining_class_test",
+            .root_module = combining_class_mod,
+        }),
+    ).step);
 }
