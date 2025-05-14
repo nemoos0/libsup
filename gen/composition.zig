@@ -77,25 +77,14 @@ pub fn main() !void {
         codes[left[comp.source[0]] * right_count + right[comp.source[1]]] = comp.dest;
     }
 
-    std.debug.print("left: {}\n", .{left_count});
-    std.debug.print("right: {}\n", .{right_count});
-    std.debug.print("codes: {}\n", .{left_count * right_count});
-
     const lbs = 256;
     const ls1, const ls2 = try parse.twoStageTable(u8, u16, lbs, gpa, left);
-    std.debug.print("left: {} . {} = {}\n", .{ ls1.len, ls2.len, ls1.len + ls2.len * 2 });
 
     const rbs = 256;
     const rs1, const rs2 = try parse.twoStageTable(u8, u8, rbs, gpa, right);
-    std.debug.print("right: {} . {} = {}\n", .{ rs1.len, rs2.len, rs1.len + rs2.len });
 
     const cbs = 4;
     const cs1, const cs2 = try parse.twoStageTable(u16, u21, cbs, gpa, codes);
-    std.debug.print("codes: {} . {} = {}\n", .{
-        cs1.len,
-        cs2.len,
-        cs1.len * 2 + cs2.len * 4,
-    });
 
     const args = try std.process.argsAlloc(gpa);
     std.debug.assert(args.len == 2);
