@@ -59,4 +59,31 @@ pub fn build(b: *std.Build) void {
             .root_module = decomposition_mod,
         }),
     ).step);
+
+    const composition_gen = b.addRunArtifact(
+        b.addExecutable(.{
+            .name = "composition_gen",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("gen/composition.zig"),
+                .target = b.graph.host,
+            }),
+        }),
+    );
+    const composition_table = composition_gen.addOutputFileArg("composition_table.zig");
+
+    const composition_mod = b.createModule(.{
+        .root_source_file = b.path("src/composition.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    composition_mod.addAnonymousImport("composition_table", .{
+        .root_source_file = composition_table,
+    });
+
+    test_step.dependOn(&b.addRunArtifact(
+        b.addTest(.{
+            .name = "composition_test",
+            .root_module = composition_mod,
+        }),
+    ).step);
 }

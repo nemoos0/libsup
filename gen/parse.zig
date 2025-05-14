@@ -64,6 +64,27 @@ pub fn columnAsEnum(comptime T: type, line: []const u8, index: usize) ?T {
     return meta.stringToEnum(T, slice);
 }
 
+pub fn printArray(
+    comptime T: type,
+    type_name: []const u8,
+    array: []const T,
+    name: []const u8,
+    writer: anytype,
+) !void {
+    const info = @typeInfo(T);
+
+    try writer.print("pub const {s} = [{d}]{s}{{", .{ name, array.len, type_name });
+    for (array, 0..) |it, i| {
+        if (i > 0) try writer.writeByte(',');
+        switch (info) {
+            .int => try writer.print("{d}", .{it}),
+            .@"enum" => try writer.print(".{s}", .{@tagName(it)}),
+            else => unreachable,
+        }
+    }
+    try writer.writeAll("};");
+}
+
 pub fn twoStageTable(
     comptime Index: type,
     comptime T: type,
