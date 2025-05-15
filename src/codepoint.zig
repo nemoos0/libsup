@@ -83,6 +83,7 @@ pub const Utf8 = struct {
 
         const first_byte = utf8.bytes[utf8.pos];
         const len = try unicode.utf8ByteSequenceLength(first_byte);
+        if (utf8.bytes[utf8.pos..].len < len) return error.Utf8ExpectedContinuation;
         const code = try unicode.utf8Decode(utf8.bytes[utf8.pos..][0..len]);
 
         defer utf8.pos += len;
