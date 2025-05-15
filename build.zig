@@ -4,34 +4,47 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const gen_exe = b.addExecutable(.{
-        .name = "gen",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("gen/general_category.zig"),
-            .target = b.graph.host,
-        }),
-    });
-    const gen_run = b.addRunArtifact(gen_exe);
-    const general_category_table = gen_run.addOutputFileArg("general_category_table.zig");
+    const test_step = b.step("test", "Run unit test");
 
-    const mod = b.createModule(.{
+    const codepoint_mod = b.createModule(.{
+        .root_source_file = b.path("src/codepoint.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    test_step.dependOn(&b.addRunArtifact(
+        b.addTest(.{
+            .name = "codepoint_test",
+            .root_module = codepoint_mod,
+        }),
+    ).step);
+
+    const general_category_gen = b.addRunArtifact(
+        b.addExecutable(.{
+            .name = "general_category_gen",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("gen/general_category.zig"),
+                .target = b.graph.host,
+            }),
+        }),
+    );
+    const general_category_table = general_category_gen.addOutputFileArg("general_category_table.zig");
+
+    const general_category_mod = b.createModule(.{
         .root_source_file = b.path("src/general_category.zig"),
         .target = target,
         .optimize = optimize,
     });
-    mod.addAnonymousImport("general_category_table", .{
+    general_category_mod.addAnonymousImport("general_category_table", .{
         .root_source_file = general_category_table,
     });
 
-    const mod_test = b.addTest(.{
-        .name = "mod",
-        .root_module = mod,
-    });
-
-    const mod_test_run = b.addRunArtifact(mod_test);
-
-    const test_step = b.step("test", "Run unit test");
-    test_step.dependOn(&mod_test_run.step);
+    test_step.dependOn(&b.addRunArtifact(
+        b.addTest(.{
+            .name = "general_category_test",
+            .root_module = general_category_mod,
+        }),
+    ).step);
 
     const decomposition_gen = b.addRunArtifact(
         b.addExecutable(.{
@@ -138,6 +151,24 @@ pub fn build(b: *std.Build) void {
         b.addTest(.{
             .name = "quick_check_test",
             .root_module = quick_check_mod,
+        }),
+    ).step);
+
+    const normalization_mod = b.createModule(.{
+        .root_source_file = b.path("src/normalization.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    normalization_mod.addImport("codepoint", codepoint_mod);
+    normalization_mod.addImport("quick_check", quick_check_mod);
+    normalization_mod.addImport("combining_class", combining_class_mod);
+    normalization_mod.addImport("composition", composition_mod);
+    normalization_mod.addImport("decomposition", decomposition_mod);
+
+    test_step.dependOn(&b.addRunArtifact(
+        b.addTest(.{
+            .name = "normalization_test",
+            .root_module = normalization_mod,
         }),
     ).step);
 }
