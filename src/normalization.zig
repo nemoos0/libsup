@@ -46,11 +46,9 @@ pub fn Normalizer(comptime form: Form) type {
         };
 
         /// If you want to avoid heap allocations you can pass a
-        /// `FixedBufferAllocator` of size 128 + 32, to keep track of 32
-        /// codepoint + combining class, which is enough "for all practical purposes".
-        ///
-        /// This assumes Stream-Safe Text Format and will return an
-        /// `error.OutOfMemory` otherwise.
+        /// `FixedBufferAllocator` of size 256 bytes which is enough
+        /// "for all practical purposes". This assumes Stream-Safe Text Format
+        /// and will return an `error.OutOfMemory` otherwise.
         ///
         /// UAX #15 section 13 Stream-Safe Text Format
         /// https://www.unicode.org/reports/tr15/#UAX15-D3
@@ -107,7 +105,6 @@ pub fn Normalizer(comptime form: Form) type {
                 if (try norm.source.next()) |cp| {
                     const pos = norm.codes.items.len;
                     try norm.appendCodeDecomposition(cp.code);
-
                     index = std.mem.indexOfScalarPos(u8, norm.classes.items, @max(1, pos), 0);
                 } else {
                     return null;
@@ -143,9 +140,9 @@ pub fn Normalizer(comptime form: Form) type {
         /// Compose the codepoints up to `norm.sorted`.
         /// Returns `true` if there is no further potential composition.
         fn composeSorted(norm: *Self) bool {
-            var max_class: u8 = 0;
-
             if (norm.classes.items[0] == 0) {
+                var max_class: u8 = 0;
+
                 var i: usize = 1;
                 while (i < norm.starter) {
                     std.debug.assert(norm.classes.items[i] >= max_class);
@@ -188,32 +185,74 @@ pub fn Normalizer(comptime form: Form) type {
     };
 }
 
-test {
-    const gpa = std.testing.allocator;
+test "conformance" {
+    var arena_state: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
 
-    const input = "á";
-    var utf8: codepoint.Utf8 = .{ .bytes = input };
+    const file = try std.fs.cwd().openFile("data/NormalizationTest.txt", .{});
+    defer file.close();
+    const reader = file.reader();
 
-    {
-        var nfd: Normalizer(.nfd) = try .init(gpa, utf8.iterator());
-        defer nfd.deinit();
+    while (try reader.readUntilDelimiterOrEofAlloc(arena, '\n', 4096)) |line| : (_ = arena_state.reset(.retain_capacity)) {
+        const content = line[0 .. std.mem.indexOfAny(u8, line, "#@") orelse line.len];
+        if (content.len == 0) continue;
 
-        var i: usize = 0;
-        while (try nfd.next()) |code| : (i += 1) {
-            std.debug.print("{x}\n", .{code});
-            if (i > 10) break;
+        var string: std.ArrayListUnmanaged(u8) = .empty;
+        var nfc: std.ArrayListUnmanaged(u8) = .empty;
+        var nfd: std.ArrayListUnmanaged(u8) = .empty;
+        var nfkc: std.ArrayListUnmanaged(u8) = .empty;
+        var nfkd: std.ArrayListUnmanaged(u8) = .empty;
+
+        var columns = std.mem.splitScalar(u8, content, ';');
+        for ([_]*std.ArrayListUnmanaged(u8){ &string, &nfc, &nfd, &nfkc, &nfkd }) |list| {
+            const trimmed = std.mem.trim(u8, columns.next().?, &std.ascii.whitespace);
+            var codes = std.mem.splitScalar(u8, trimmed, ' ');
+
+            while (codes.next()) |slice| {
+                const code = try std.fmt.parseInt(u21, slice, 16);
+                try list.ensureUnusedCapacity(arena, 4);
+                list.items.len += try std.unicode.utf8Encode(code, list.unusedCapacitySlice());
+            }
         }
-    }
 
-    {
-        utf8.pos = 0;
-        var nfc: Normalizer(.nfc) = try .init(gpa, utf8.iterator());
-        defer nfc.deinit();
-
-        var i: usize = 0;
-        while (try nfc.next()) |code| : (i += 1) {
-            std.debug.print("{x}\n", .{code});
-            if (i > 10) break;
-        }
+        try expectEqualForms(string.items, nfc.items, nfd.items, nfkc.items, nfkd.items);
+        try expectEqualForms(nfc.items, nfc.items, nfd.items, nfkc.items, nfkd.items);
+        try expectEqualForms(nfd.items, nfc.items, nfd.items, nfkc.items, nfkd.items);
+        try expectEqualForms(nfkc.items, nfkc.items, nfkd.items, nfkc.items, nfkd.items);
+        try expectEqualForms(nfkd.items, nfkc.items, nfkd.items, nfkc.items, nfkd.items);
     }
+}
+
+fn expectEqualForms(
+    original: []const u8,
+    nfc: []const u8,
+    nfd: []const u8,
+    nfkc: []const u8,
+    nfkd: []const u8,
+) !void {
+    try expectEqualForm(original, nfc, .nfc);
+    try expectEqualForm(original, nfd, .nfd);
+    try expectEqualForm(original, nfkc, .nfkc);
+    try expectEqualForm(original, nfkd, .nfkd);
+}
+
+fn expectEqualForm(
+    original: []const u8,
+    expected: []const u8,
+    comptime form: Form,
+) !void {
+    var buffer: [256]u8 = undefined;
+    var fba: std.heap.FixedBufferAllocator = .init(&buffer);
+
+    var original_utf8: codepoint.Utf8Unchecked = .{ .bytes = original };
+    var norm: Normalizer(form) = try .init(fba.allocator(), original_utf8.iterator());
+
+    var expected_utf8: codepoint.Utf8Unchecked = .{ .bytes = expected };
+
+    while (expected_utf8.next()) |expected_code| {
+        const actual_code = try norm.next();
+        try std.testing.expectEqual(expected_code.code, actual_code.?);
+    }
+    try std.testing.expectEqual(null, try norm.next());
 }
