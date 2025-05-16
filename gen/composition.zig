@@ -1,5 +1,5 @@
 const std = @import("std");
-const parse = @import("parse.zig");
+const ucd = @import("ucd.zig");
 
 const Composition = struct {
     source: [2]u21,
@@ -15,17 +15,17 @@ pub fn main() !void {
         const file = try std.fs.cwd().openFile("data/UnicodeData.txt", .{});
         defer file.close();
 
-        while (try parse.nextLine(file)) |line| {
-            const decomp_column = parse.column(line, 5) orelse unreachable;
+        while (try ucd.nextLine(file)) |line| {
+            const decomp_column = ucd.column(line, 5).?;
             if (decomp_column.len == 0 or decomp_column[0] == '<') continue;
 
             if (std.mem.indexOfScalar(u8, decomp_column, ' ')) |space| {
-                const code1 = try std.fmt.parseInt(u21, decomp_column[0..space], 16);
-                const code2 = try std.fmt.parseInt(u21, decomp_column[space + 1 ..], 16);
+                const code1 = try ucd.asCodepoint(decomp_column[0..space]);
+                const code2 = try ucd.asCodepoint(decomp_column[space + 1 ..]);
 
                 try comp_list.append(.{
                     .source = .{ code1, code2 },
-                    .dest = try parse.columnAsCodepoint(line, 0) orelse unreachable,
+                    .dest = try ucd.asCodepoint(ucd.column(line, 0).?),
                 });
             }
         }
@@ -35,9 +35,9 @@ pub fn main() !void {
         const file = try std.fs.cwd().openFile("data/DerivedNormalizationProps.txt", .{});
         defer file.close();
 
-        while (try parse.nextLine(file)) |line| {
-            if (std.mem.eql(u8, "Full_Composition_Exclusion", parse.column(line, 1).?)) {
-                const range = try parse.columnAsRange(line, 0) orelse unreachable;
+        while (try ucd.nextLine(file)) |line| {
+            if (std.mem.eql(u8, "Full_Composition_Exclusion", ucd.column(line, 1).?)) {
+                const range = try ucd.asRange(ucd.column(line, 0).?);
                 var i: usize = comp_list.items.len;
                 while (i > 0) {
                     i -= 1;
@@ -78,13 +78,13 @@ pub fn main() !void {
     }
 
     const lbs = 256;
-    const ls1, const ls2 = try parse.twoStageTable(u8, u16, lbs, gpa, left);
+    const ls1, const ls2 = try ucd.twoStageTable(u8, u16, lbs, gpa, left);
 
     const rbs = 256;
-    const rs1, const rs2 = try parse.twoStageTable(u8, u8, rbs, gpa, right);
+    const rs1, const rs2 = try ucd.twoStageTable(u8, u8, rbs, gpa, right);
 
     const cbs = 4;
-    const cs1, const cs2 = try parse.twoStageTable(u16, u21, cbs, gpa, codes);
+    const cs1, const cs2 = try ucd.twoStageTable(u16, u21, cbs, gpa, codes);
 
     const args = try std.process.argsAlloc(gpa);
     std.debug.assert(args.len == 2);
@@ -93,16 +93,16 @@ pub fn main() !void {
     defer output.close();
     const writer = output.writer();
 
-    try writer.print("pub const lbs = {};", .{lbs});
-    try parse.printArray(u8, "u8", ls1, "ls1", writer);
-    try parse.printArray(u16, "u16", ls2, "ls2", writer);
+    try ucd.printConst("lbs", lbs, writer);
+    try ucd.printConst("ls1", ls1, writer);
+    try ucd.printConst("ls2", ls2, writer);
 
-    try writer.print("pub const rbs = {};", .{rbs});
-    try parse.printArray(u8, "u8", rs1, "rs1", writer);
-    try parse.printArray(u8, "u8", rs2, "rs2", writer);
+    try ucd.printConst("rbs", rbs, writer);
+    try ucd.printConst("rs1", rs1, writer);
+    try ucd.printConst("rs2", rs2, writer);
 
-    try writer.print("pub const width = {};", .{right_count});
-    try writer.print("pub const cbs = {};", .{cbs});
-    try parse.printArray(u16, "u16", cs1, "cs1", writer);
-    try parse.printArray(u21, "u21", cs2, "cs2", writer);
+    try ucd.printConst("width", right_count, writer);
+    try ucd.printConst("cbs", cbs, writer);
+    try ucd.printConst("cs1", cs1, writer);
+    try ucd.printConst("cs2", cs2, writer);
 }
