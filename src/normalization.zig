@@ -86,7 +86,7 @@ pub fn Normalizer(comptime form: Form) type {
                     return null;
                 }
 
-                std.mem.sortUnstableContext(0, norm.starter, SortContext{
+                std.mem.sortContext(0, norm.starter, SortContext{
                     .codes = norm.codes.items,
                     .classes = norm.classes.items,
                 });
@@ -107,6 +107,7 @@ pub fn Normalizer(comptime form: Form) type {
                 if (try norm.source.next()) |cp| {
                     const pos = norm.codes.items.len;
                     try norm.appendCodeDecomposition(cp.code);
+
                     index = std.mem.indexOfScalarPos(u8, norm.classes.items, @max(1, pos), 0);
                 } else {
                     return null;
@@ -142,9 +143,17 @@ pub fn Normalizer(comptime form: Form) type {
         /// Compose the codepoints up to `norm.sorted`.
         /// Returns `true` if there is no further potential composition.
         fn composeSorted(norm: *Self) bool {
+            var max_class: u8 = 0;
+
             if (norm.classes.items[0] == 0) {
                 var i: usize = 1;
                 while (i < norm.starter) {
+                    std.debug.assert(norm.classes.items[i] >= max_class);
+                    if (norm.classes.items[i] == max_class) {
+                        i += 1;
+                        continue;
+                    }
+
                     const right = norm.codes.items[i];
                     if (composition.get(norm.codes.items[0], right)) |code| {
                         _ = norm.codes.orderedRemove(i);
@@ -153,6 +162,7 @@ pub fn Normalizer(comptime form: Form) type {
                         norm.codes.items[0] = code;
                         norm.starter -= 1;
                     } else {
+                        max_class = norm.classes.items[i];
                         i += 1;
                     }
                 }
