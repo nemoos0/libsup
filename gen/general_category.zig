@@ -1,5 +1,5 @@
 const std = @import("std");
-const parse = @import("parse.zig");
+const ucd = @import("ucd.zig");
 
 const GeneralCategory = enum(u5) {
     // zig fmt: off
@@ -16,21 +16,21 @@ const GeneralCategory = enum(u5) {
 pub fn main() !void {
     const gpa = std.heap.smp_allocator;
 
-    const general_cetegories = try gpa.alloc(GeneralCategory, 0x110000);
+    const general_categories = try gpa.alloc(GeneralCategory, 0x110000);
 
     {
         const file = try std.fs.cwd().openFile("data/extracted/DerivedGeneralCategory.txt", .{});
         defer file.close();
 
-        while (try parse.nextLine(file)) |line| {
-            const range = try parse.columnAsRange(line, 0) orelse unreachable;
-            const general_category = parse.columnAsEnum(GeneralCategory, line, 1).?;
-            @memset(general_cetegories[range.start..range.end], general_category);
+        while (ucd.nextLine(file)) |line| {
+            const range = try ucd.asRange(ucd.column(line, 0).?);
+            const general_category = std.meta.stringToEnum(GeneralCategory, ucd.column(line, 1).?).?;
+            @memset(general_categories[range.start..range.end], general_category);
         }
     }
 
-    const block_size = 256;
-    const s1, const s2 = try parse.twoStageTable(u8, GeneralCategory, block_size, gpa, general_cetegories);
+    const bs = 256;
+    const s1, const s2 = try ucd.twoStageTable(u8, GeneralCategory, bs, gpa, general_categories);
 
     const args = try std.process.argsAlloc(gpa);
     std.debug.assert(args.len == 2);
@@ -39,25 +39,8 @@ pub fn main() !void {
     defer output.close();
     const writer = output.writer();
 
-    try writer.writeAll("pub const GeneralCategory = enum(u5) {");
-    for (std.meta.fieldNames(GeneralCategory), 0..) |name, i| {
-        if (i > 0) try writer.writeByte(',');
-        try writer.print("{s}", .{name});
-    }
-    try writer.writeAll("};");
-
-    try writer.print("pub const block_size = {};", .{block_size});
-    try writer.print("pub const s1 = [{}]u8{{", .{s1.len});
-    for (s1, 0..) |it, i| {
-        if (i > 0) try writer.writeByte(',');
-        try writer.print("{}", .{it});
-    }
-    try writer.writeAll("};");
-
-    try writer.print("pub const s2 = [{}]GeneralCategory{{", .{s2.len});
-    for (s2, 0..) |it, i| {
-        if (i > 0) try writer.writeByte(',');
-        try writer.print(".{s}", .{@tagName(it)});
-    }
-    try writer.writeAll("};");
+    try ucd.printConst("GeneralCategory", GeneralCategory, writer);
+    try ucd.printConst("bs", bs, writer);
+    try ucd.printConst("s1", s1, writer);
+    try ucd.printConst("s2", s2, writer);
 }
