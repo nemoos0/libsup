@@ -45,13 +45,17 @@ pub fn fullCanonical(code: u21, dest: []u21) u3 {
         return fullHangul(code, dest);
     }
 
-    if (canonical(code)) |pair| {
+    if (canonical(code)) |slice| {
         // NOTE: only the first codepoint can have further decomposition
         // as stated in UAX #44 section 5.7.3 Character Decomposition Mapping
         // https://www.unicode.org/reports/tr44/#Character_Decomposition_Mappings
-        const len = fullCanonical(pair[0], dest);
-        if (pair.len > 1) dest[len] = pair[1];
-        return len + 1;
+        const len = fullCanonical(slice[0], dest);
+        if (slice.len > 1) {
+            dest[len] = slice[1];
+            return len + 1;
+        }
+
+        return len;
     } else {
         dest[0] = code;
         return 1;
@@ -165,6 +169,9 @@ test "canonical" {
     for (0..0x110000) |i| {
         _ = fullCanonical(@intCast(i), &dest);
     }
+
+    try std.testing.expectEqual(1, fullCanonical(0x340, &dest));
+    try std.testing.expectEqualSlices(u21, &[_]u21{0x300}, dest[0..1]);
 
     try std.testing.expectEqual(2, fullCanonical(0xac00, &dest));
     try std.testing.expectEqualSlices(u21, &[_]u21{ 0x1100, 0x1161 }, dest[0..2]);
