@@ -7,8 +7,8 @@ pub fn get(code: u21) GeneralCategory {
     std.debug.assert(code < 0x110000);
     return table.s2[
         @as(u32, @intCast(
-            table.s1[code / table.block_size],
-        )) * table.block_size + code % table.block_size
+            table.s1[code / table.bs],
+        )) * table.bs + code % table.bs
     ];
 }
 
