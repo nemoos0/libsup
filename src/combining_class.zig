@@ -10,3 +10,7 @@ pub fn get(code: u21) u8 {
         )) * table.bs + code % table.bs
     ];
 }
+
+test {
+    try std.testing.expectEqual(0, get('a'));
+}

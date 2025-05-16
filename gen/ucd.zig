@@ -129,15 +129,15 @@ fn printType(T: type, writer: anytype) !void {
 
             try writer.writeAll("struct");
             if (info.@"struct".backing_integer) |I| {
-                try writer.writeAll('(');
+                try writer.writeByte('(');
                 try printType(I, writer);
-                try writer.writeAll(')');
+                try writer.writeByte(')');
             }
 
             try writer.writeAll(" {");
             inline for (comptime std.meta.fields(T), 0..) |field, i| {
                 if (i > 0) try writer.writeByte(',');
-                try writer.print("{s} = {s}", .{ field.name, typeSuffix(field.type) });
+                try writer.print("{s}: {s}", .{ field.name, typeSuffix(field.type) });
             }
             try writer.writeAll("}");
         },

@@ -13,3 +13,12 @@ pub fn get(code: u21) QuickCheck {
         )) * table.bs + code % table.bs
     ];
 }
+
+test {
+    try std.testing.expectEqual(QuickCheck{
+        .nfd = .yes,
+        .nfc = .yes,
+        .nfkd = .yes,
+        .nfkc = .yes,
+    }, get('a'));
+}
