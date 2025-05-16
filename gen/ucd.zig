@@ -12,8 +12,8 @@ var buf: [1024]u8 = undefined;
 
 const Range = struct { start: u21, end: u21 };
 
-pub fn nextLine(file: fs.File) ?[]const u8 {
-    if (file.reader().readUntilDelimiterOrEof(&buf, '\n') catch unreachable) |line| {
+pub fn nextLine(file: fs.File) !?[]const u8 {
+    if (try file.reader().readUntilDelimiterOrEof(&buf, '\n')) |line| {
         const comment = mem.indexOfAny(u8, line, "@#") orelse line.len;
         const content = line[0..comment];
 

@@ -22,7 +22,7 @@ pub fn main() !void {
         const file = try std.fs.cwd().openFile("data/extracted/DerivedGeneralCategory.txt", .{});
         defer file.close();
 
-        while (ucd.nextLine(file)) |line| {
+        while (try ucd.nextLine(file)) |line| {
             const range = try ucd.asRange(ucd.column(line, 0).?);
             const general_category = std.meta.stringToEnum(GeneralCategory, ucd.column(line, 1).?).?;
             @memset(general_categories[range.start..range.end], general_category);
