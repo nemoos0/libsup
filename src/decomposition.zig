@@ -151,7 +151,7 @@ fn fullHangul(code: u21, dest: []u21) u2 {
     const t_part = t_base + t_index;
 
     var len: u2 = 2;
-    len += @intFromBool(t_part > 0);
+    len += @intFromBool(t_index > 0);
     @memcpy(
         dest[0..len],
         ([_]u21{ l_part, v_part, t_part })[0..len],
@@ -165,6 +165,9 @@ test "canonical" {
     for (0..0x110000) |i| {
         _ = fullCanonical(@intCast(i), &dest);
     }
+
+    try std.testing.expectEqual(2, fullCanonical(0xac00, &dest));
+    try std.testing.expectEqualSlices(u21, &[_]u21{ 0x1100, 0x1161 }, dest[0..2]);
 }
 
 test "compatibility" {
