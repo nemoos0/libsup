@@ -1,5 +1,5 @@
 const std = @import("std");
-const parse = @import("parse.zig");
+const ucd = @import("ucd.zig");
 
 const CompatibilityTag = enum(u5) {
     none,
@@ -41,10 +41,10 @@ pub fn main() !void {
         const file = try std.fs.cwd().openFile("data/UnicodeData.txt", .{});
         defer file.close();
 
-        while (try parse.nextLine(file)) |line| {
-            const decomp_column = parse.column(line, 5) orelse unreachable;
-            if (try columnAsDecomp(gpa, decomp_column)) |tuple| {
-                const source = try parse.columnAsCodepoint(line, 0) orelse unreachable;
+        while (try ucd.nextLine(file)) |line| {
+            const decomp_column = ucd.column(line, 5).?;
+            if (try asDecomp(gpa, decomp_column)) |tuple| {
+                const source = try ucd.asCodepoint(ucd.column(line, 0).?);
                 const tag, const dest = tuple;
                 try decomp_list.append(.{ .source = source, .dest = dest, .tag = tag });
             }
@@ -71,7 +71,7 @@ pub fn main() !void {
     }
 
     const block_size = 64;
-    const s1, const s2 = try parse.twoStageTable(u8, Slice, block_size, gpa, slices);
+    const s1, const s2 = try ucd.twoStageTable(u8, Slice, block_size, gpa, slices);
 
     const args = try std.process.argsAlloc(gpa);
     std.debug.assert(args.len == 2);
@@ -80,21 +80,9 @@ pub fn main() !void {
     defer output.close();
     const writer = output.writer();
 
-    try writer.writeAll("pub const CompatibilityTag = enum(u5) {");
-    for (std.meta.fieldNames(CompatibilityTag), 0..) |name, i| {
-        if (i > 0) try writer.writeByte(',');
-        try writer.print("{s}", .{name});
-    }
-    try writer.writeAll("};");
-
-    try writer.print("pub const block_size = {};", .{block_size});
-
-    try writer.print("pub const s1 = [{}]u8{{", .{s1.len});
-    for (s1, 0..) |it, i| {
-        if (i > 0) try writer.writeByte(',');
-        try writer.print("{}", .{it});
-    }
-    try writer.writeAll("};");
+    try ucd.printConst("CompatibilityTag", CompatibilityTag, writer);
+    try ucd.printConst("bs", block_size, writer);
+    try ucd.printConst("s1", s1, writer);
 
     try writer.print("pub const s2_off = [{}]u16{{", .{s2.len});
     for (s2, 0..) |it, i| {
@@ -117,15 +105,10 @@ pub fn main() !void {
     }
     try writer.writeAll("};");
 
-    try writer.print("pub const codes = [{}]u21{{", .{code_list.items.len});
-    for (code_list.items, 0..) |it, i| {
-        if (i > 0) try writer.writeByte(',');
-        try writer.print("{}", .{it});
-    }
-    try writer.writeAll("};");
+    try ucd.printConst("codes", code_list.items, writer);
 }
 
-fn columnAsDecomp(gpa: std.mem.Allocator, column: []const u8) !?struct { CompatibilityTag, []const u21 } {
+fn asDecomp(gpa: std.mem.Allocator, column: []const u8) !?struct { CompatibilityTag, []const u21 } {
     if (column.len == 0) return null;
 
     var tag: CompatibilityTag = .none;

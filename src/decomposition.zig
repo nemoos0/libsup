@@ -6,10 +6,10 @@ pub const CompatibilityTag = table.CompatibilityTag;
 pub fn compatibilityTag(code: u21) CompatibilityTag {
     std.debug.assert(code < 0x110000);
 
-    const high_bits = code / table.block_size;
-    const low_bits = code % table.block_size;
+    const high_bits = code / table.bs;
+    const low_bits = code % table.bs;
 
-    const idx: u32 = @as(u32, @intCast(table.s1[high_bits])) * table.block_size + low_bits;
+    const idx: u32 = @as(u32, @intCast(table.s1[high_bits])) * table.bs + low_bits;
     return table.s2_tag[idx];
 }
 
@@ -20,10 +20,10 @@ pub fn canonical(code: u21) ?[]const u21 {
         return hangul(code);
     }
 
-    const high_bits = code / table.block_size;
-    const low_bits = code % table.block_size;
+    const high_bits = code / table.bs;
+    const low_bits = code % table.bs;
 
-    const idx: u32 = @as(u32, @intCast(table.s1[high_bits])) * table.block_size + low_bits;
+    const idx: u32 = @as(u32, @intCast(table.s1[high_bits])) * table.bs + low_bits;
 
     const len = table.s2_len[idx];
     if (len == 0) return null;
@@ -65,10 +65,10 @@ pub fn compatibility(code: u21) ?[]const u21 {
         return hangul(code);
     }
 
-    const high_bits = code / table.block_size;
-    const low_bits = code % table.block_size;
+    const high_bits = code / table.bs;
+    const low_bits = code % table.bs;
 
-    const idx: u32 = @as(u32, @intCast(table.s1[high_bits])) * table.block_size + low_bits;
+    const idx: u32 = @as(u32, @intCast(table.s1[high_bits])) * table.bs + low_bits;
 
     const len = table.s2_len[idx];
     if (len == 0) return null;
