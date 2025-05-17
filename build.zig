@@ -171,4 +171,31 @@ pub fn build(b: *std.Build) void {
             .root_module = normalization_mod,
         }),
     ).step);
+
+    const case_mapping_gen = b.addRunArtifact(
+        b.addExecutable(.{
+            .name = "case_mapping_gen",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("gen/case_mapping.zig"),
+                .target = b.graph.host,
+            }),
+        }),
+    );
+    const case_mapping_table = case_mapping_gen.addOutputFileArg("case_mapping_table.zig");
+
+    const case_mapping_mod = b.createModule(.{
+        .root_source_file = b.path("src/case_mapping.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    case_mapping_mod.addAnonymousImport("case_mapping_table", .{
+        .root_source_file = case_mapping_table,
+    });
+
+    test_step.dependOn(&b.addRunArtifact(
+        b.addTest(.{
+            .name = "case_mapping_test",
+            .root_module = case_mapping_mod,
+        }),
+    ).step);
 }

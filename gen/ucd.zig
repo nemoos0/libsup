@@ -42,6 +42,15 @@ pub fn asCodepoint(slice: []const u8) !u21 {
     return try fmt.parseInt(u21, slice, 16);
 }
 
+pub fn asCodepointSlice(arena: Allocator, slice: []const u8) ![]u21 {
+    var list: std.ArrayList(u21) = .init(arena);
+
+    var iter = std.mem.splitSequence(u8, slice, " ");
+    while (iter.next()) |code| try list.append(try asCodepoint(code));
+
+    return try list.toOwnedSlice();
+}
+
 pub fn asRange(slice: []const u8) !Range {
     var range: Range = undefined;
 
