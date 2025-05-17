@@ -117,11 +117,11 @@ pub const Utf8 = struct {
     }
 };
 
-pub fn bufferedReader(reader: anytype) BufferedReader(4096, @TypeOf(reader)) {
+pub fn fromReader(reader: anytype) FromReader(4096, @TypeOf(reader)) {
     return .{ .unbuffered_reader = reader };
 }
 
-pub fn BufferedReader(comptime buffer_size: usize, comptime ReaderType: type) type {
+pub fn FromReader(comptime buffer_size: usize, comptime ReaderType: type) type {
     assert(buffer_size >= 4);
 
     return struct {
@@ -208,7 +208,7 @@ test "iterators" {
     var utf8: Utf8 = .{ .bytes = buf };
 
     var stream = std.io.fixedBufferStream(buf);
-    var buffered_reader = bufferedReader(stream.reader());
+    var buffered_reader = fromReader(stream.reader());
 
     var offset: usize = 0;
     const view: unicode.Utf8View = .initUnchecked(buf);
