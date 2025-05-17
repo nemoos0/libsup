@@ -18,6 +18,8 @@ pub const Iterator = struct {
     }
 };
 
+/// Must be used only with slices which are known to contain valid utf8
+/// encoded text.
 pub const Utf8Unchecked = struct {
     bytes: []const u8,
     pos: usize = 0,
@@ -25,43 +27,58 @@ pub const Utf8Unchecked = struct {
     pub fn next(utf8: *Utf8Unchecked) ?Codepoint {
         if (utf8.pos >= utf8.bytes.len) return null;
 
-        const first_byte = utf8.bytes[utf8.pos];
-        const len = unicode.utf8ByteSequenceLength(first_byte) catch unreachable;
         var codepoint: Codepoint = .{
             .offset = utf8.pos,
-            .len = len,
+            .len = undefined,
             .code = undefined,
         };
 
+        const first_byte = utf8.bytes[utf8.pos];
         utf8.pos += 1;
-        switch (len) {
-            1 => codepoint.code = first_byte,
-            2 => {
+        switch (first_byte) {
+            0b0000_0000...0b0111_1111 => {
+                codepoint.len = 1;
+                codepoint.code = first_byte;
+                return codepoint;
+            },
+            0b1100_0000...0b1101_1111 => {
+                codepoint.len = 2;
+
                 codepoint.code = first_byte & 0b0001_1111;
                 codepoint.code <<= 6;
                 codepoint.code |= utf8.bytes[utf8.pos] & 0b0011_1111;
                 utf8.pos += 1;
+
+                return codepoint;
             },
-            3 => {
+            0b1110_0000...0b1110_1111 => {
+                codepoint.len = 3;
+
                 codepoint.code = first_byte & 0b0000_1111;
                 inline for (0..2) |_| {
                     codepoint.code <<= 6;
                     codepoint.code |= utf8.bytes[utf8.pos] & 0b0011_1111;
                     utf8.pos += 1;
                 }
+
+                return codepoint;
             },
-            4 => {
+            0b1111_0000...0b1111_0111 => {
+                codepoint.len = 4;
+
                 codepoint.code = first_byte & 0b0000_0111;
                 inline for (0..3) |_| {
                     codepoint.code <<= 6;
                     codepoint.code |= utf8.bytes[utf8.pos] & 0b0011_1111;
                     utf8.pos += 1;
                 }
+
+                return codepoint;
             },
             else => unreachable,
         }
 
-        return codepoint;
+        unreachable;
     }
 
     pub fn iterator(utf8: *Utf8Unchecked) Iterator {
