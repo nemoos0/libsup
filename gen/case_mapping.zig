@@ -113,7 +113,6 @@ pub fn main() !void {
 
         const block_size = 128;
         const s1, const s2 = try ucd.twoStageTable(u8, Slice, block_size, gpa, slices);
-        std.debug.print("{}\n", .{s1.len + s2.len * 3});
 
         try ucd.printConst("upper_bs", block_size, writer);
         try ucd.printConst("upper_s1", s1, writer);
@@ -152,7 +151,6 @@ pub fn main() !void {
 
         const block_size = 128;
         const s1, const s2 = try ucd.twoStageTable(u8, Slice, block_size, gpa, slices);
-        std.debug.print("{}\n", .{s1.len + s2.len * 3});
 
         try ucd.printConst("title_bs", block_size, writer);
         try ucd.printConst("title_s1", s1, writer);
@@ -191,7 +189,6 @@ pub fn main() !void {
 
         const block_size = 128;
         const s1, const s2 = try ucd.twoStageTable(u8, Slice, block_size, gpa, slices);
-        std.debug.print("{}\n", .{s1.len + s2.len * 3});
 
         try ucd.printConst("lower_bs", block_size, writer);
         try ucd.printConst("lower_s1", s1, writer);
