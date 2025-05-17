@@ -115,7 +115,7 @@ const t_count = 28;
 const n_count = (v_count * t_count);
 const s_count = (l_count * n_count);
 
-var hangul_buffer: [2]u21 = undefined;
+threadlocal var hangul_buffer: [2]u21 = undefined;
 
 fn hangul(code: u21) []const u21 {
     std.debug.assert(code >= s_base and code < s_base + s_count);
