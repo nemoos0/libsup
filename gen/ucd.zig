@@ -97,11 +97,20 @@ pub fn printValue(value: anytype, writer: anytype) !void {
         .array => try printValue(&value, writer),
         .@"enum" => try writer.print(".{s}", .{@tagName(value)}),
         .@"struct" => {
+            var count: usize = 0;
+
             try writer.writeAll(".{");
-            inline for (comptime std.meta.fieldNames(T), 0..) |name, i| {
-                if (i > 0) try writer.writeByte(',');
-                try writer.print(".{s} = ", .{name});
-                try printValue(@field(value, name), writer);
+            inline for (comptime std.meta.fields(T)) |field| {
+                if (field.defaultValue()) |default| {
+                    if (std.meta.eql(@field(value, field.name), default)) {
+                        comptime continue;
+                    }
+                }
+
+                if (count > 0) try writer.writeByte(',');
+                try writer.print(".{s} = ", .{field.name});
+                try printValue(@field(value, field.name), writer);
+                count += 1;
             }
             try writer.writeAll("}");
         },
@@ -147,6 +156,10 @@ fn printType(T: type, writer: anytype) !void {
             inline for (comptime std.meta.fields(T), 0..) |field, i| {
                 if (i > 0) try writer.writeByte(',');
                 try writer.print("{s}: {s}", .{ field.name, typeSuffix(field.type) });
+                if (field.defaultValue()) |default| {
+                    try writer.writeAll(" = ");
+                    try printValue(default, writer);
+                }
             }
             try writer.writeAll("}");
         },

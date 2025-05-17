@@ -225,4 +225,31 @@ pub fn build(b: *std.Build) void {
             .root_module = case_folding_mod,
         }),
     ).step);
+
+    const case_props_gen = b.addRunArtifact(
+        b.addExecutable(.{
+            .name = "case_props_gen",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("gen/case_props.zig"),
+                .target = b.graph.host,
+            }),
+        }),
+    );
+    const case_props_table = case_props_gen.addOutputFileArg("case_props_table.zig");
+
+    const case_props_mod = b.createModule(.{
+        .root_source_file = b.path("src/case_props.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    case_props_mod.addAnonymousImport("case_props_table", .{
+        .root_source_file = case_props_table,
+    });
+
+    test_step.dependOn(&b.addRunArtifact(
+        b.addTest(.{
+            .name = "case_props_test",
+            .root_module = case_props_mod,
+        }),
+    ).step);
 }
