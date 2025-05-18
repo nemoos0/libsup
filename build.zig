@@ -57,22 +57,6 @@ pub fn build(b: *std.Build) void {
     );
     const decomposition_table = decomposition_gen.addOutputFileArg("decomposition_table.zig");
 
-    const decomposition_mod = b.createModule(.{
-        .root_source_file = b.path("src/decomposition.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    decomposition_mod.addAnonymousImport("decomposition_table", .{
-        .root_source_file = decomposition_table,
-    });
-
-    test_step.dependOn(&b.addRunArtifact(
-        b.addTest(.{
-            .name = "decomposition_test",
-            .root_module = decomposition_mod,
-        }),
-    ).step);
-
     const composition_gen = b.addRunArtifact(
         b.addExecutable(.{
             .name = "composition_gen",
@@ -83,22 +67,6 @@ pub fn build(b: *std.Build) void {
         }),
     );
     const composition_table = composition_gen.addOutputFileArg("composition_table.zig");
-
-    const composition_mod = b.createModule(.{
-        .root_source_file = b.path("src/composition.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    composition_mod.addAnonymousImport("composition_table", .{
-        .root_source_file = composition_table,
-    });
-
-    test_step.dependOn(&b.addRunArtifact(
-        b.addTest(.{
-            .name = "composition_test",
-            .root_module = composition_mod,
-        }),
-    ).step);
 
     const combining_class_gen = b.addRunArtifact(
         b.addExecutable(.{
@@ -111,22 +79,6 @@ pub fn build(b: *std.Build) void {
     );
     const combining_class_table = combining_class_gen.addOutputFileArg("combining_class_table.zig");
 
-    const combining_class_mod = b.createModule(.{
-        .root_source_file = b.path("src/combining_class.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    combining_class_mod.addAnonymousImport("combining_class_table", .{
-        .root_source_file = combining_class_table,
-    });
-
-    test_step.dependOn(&b.addRunArtifact(
-        b.addTest(.{
-            .name = "combining_class_test",
-            .root_module = combining_class_mod,
-        }),
-    ).step);
-
     const quick_check_gen = b.addRunArtifact(
         b.addExecutable(.{
             .name = "quick_check_gen",
@@ -138,32 +90,16 @@ pub fn build(b: *std.Build) void {
     );
     const quick_check_table = quick_check_gen.addOutputFileArg("quick_check_table.zig");
 
-    const quick_check_mod = b.createModule(.{
-        .root_source_file = b.path("src/quick_check.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    quick_check_mod.addAnonymousImport("quick_check_table", .{
-        .root_source_file = quick_check_table,
-    });
-
-    test_step.dependOn(&b.addRunArtifact(
-        b.addTest(.{
-            .name = "quick_check_test",
-            .root_module = quick_check_mod,
-        }),
-    ).step);
-
     const normalization_mod = b.createModule(.{
         .root_source_file = b.path("src/normalization.zig"),
         .target = target,
         .optimize = optimize,
     });
     normalization_mod.addImport("codepoint", codepoint_mod);
-    normalization_mod.addImport("quick_check", quick_check_mod);
-    normalization_mod.addImport("combining_class", combining_class_mod);
-    normalization_mod.addImport("composition", composition_mod);
-    normalization_mod.addImport("decomposition", decomposition_mod);
+    normalization_mod.addAnonymousImport("combining_class_table", .{ .root_source_file = combining_class_table });
+    normalization_mod.addAnonymousImport("decomposition_table", .{ .root_source_file = decomposition_table });
+    normalization_mod.addAnonymousImport("composition_table", .{ .root_source_file = composition_table });
+    normalization_mod.addAnonymousImport("quick_check_table", .{ .root_source_file = quick_check_table });
 
     test_step.dependOn(&b.addRunArtifact(
         b.addTest(.{

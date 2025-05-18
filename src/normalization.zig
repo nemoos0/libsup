@@ -1,12 +1,13 @@
 const std = @import("std");
 const codepoint = @import("codepoint");
-const quick_check = @import("quick_check");
-const combining_class = @import("combining_class");
-const decomposition = @import("decomposition");
-const composition = @import("composition");
 
-const ArrayListUnmanaged = std.ArrayListUnmanaged;
+const qc_table = @import("quick_check_table");
+const ccc_table = @import("combining_class_table");
+const decomp_table = @import("decomposition_table");
+const comp_table = @import("composition_table");
+
 const Allocator = std.mem.Allocator;
+const ArrayListUnmanaged = std.ArrayListUnmanaged;
 
 pub const Form = packed struct(u2) {
     composed: bool,
@@ -118,10 +119,10 @@ pub fn Normalizer(comptime form: Form) type {
             const len = blk: {
                 if (comptime form.canonical) {
                     try norm.codes.ensureUnusedCapacity(norm.gpa, 4);
-                    break :blk decomposition.fullCanonical(original, norm.codes.unusedCapacitySlice());
+                    break :blk fullCanonicalDecomposition(original, norm.codes.unusedCapacitySlice());
                 } else {
                     try norm.codes.ensureUnusedCapacity(norm.gpa, 18);
-                    break :blk decomposition.fullCompatibility(original, norm.codes.unusedCapacitySlice());
+                    break :blk fullCompatibilityDecomposition(original, norm.codes.unusedCapacitySlice());
                 }
             };
 
@@ -130,7 +131,7 @@ pub fn Normalizer(comptime form: Form) type {
                 norm.codes.unusedCapacitySlice()[0..len],
                 norm.classes.unusedCapacitySlice()[0..len],
             ) |code, *class| {
-                class.* = combining_class.get(code);
+                class.* = combiningClass(code);
             }
 
             norm.codes.items.len += len;
@@ -152,7 +153,7 @@ pub fn Normalizer(comptime form: Form) type {
                     }
 
                     const right = norm.codes.items[i];
-                    if (composition.get(norm.codes.items[0], right)) |code| {
+                    if (composition(norm.codes.items[0], right)) |code| {
                         _ = norm.codes.orderedRemove(i);
                         _ = norm.classes.orderedRemove(i);
 
@@ -165,7 +166,7 @@ pub fn Normalizer(comptime form: Form) type {
                 }
 
                 if (norm.starter == 1 and norm.codes.items.len > 1) {
-                    if (composition.get(
+                    if (composition(
                         norm.codes.items[0],
                         norm.codes.items[norm.starter],
                     )) |code| {
@@ -255,4 +256,293 @@ fn expectEqualForm(
         try std.testing.expectEqual(expected_code.code, actual_code.?);
     }
     try std.testing.expectEqual(null, try norm.next());
+}
+
+pub const CompatibilityTag = decomp_table.CompatibilityTag;
+
+pub fn compatibilityTag(code: u21) CompatibilityTag {
+    std.debug.assert(code < 0x110000);
+
+    const high_bits = code / decomp_table.bs;
+    const low_bits = code % decomp_table.bs;
+
+    const idx: u32 = @as(u32, @intCast(decomp_table.s1[high_bits])) * decomp_table.bs + low_bits;
+    return decomp_table.s2_tag[idx];
+}
+
+pub fn canonicalDecomposition(code: u21) ?[]const u21 {
+    std.debug.assert(code < 0x110000);
+
+    if (code >= s_base and code < s_base + s_count) {
+        return hangulDecomposition(code);
+    }
+
+    const high_bits = code / decomp_table.bs;
+    const low_bits = code % decomp_table.bs;
+
+    const idx: u32 = @as(u32, @intCast(decomp_table.s1[high_bits])) * decomp_table.bs + low_bits;
+
+    const len = decomp_table.s2_len[idx];
+    if (len == 0) return null;
+
+    const tag = decomp_table.s2_tag[idx];
+    if (tag != .none) return null;
+
+    const off = decomp_table.s2_off[idx];
+    return decomp_table.codes[off..][0..len];
+}
+
+/// Ensure `dest.len >= 4` to fit every possible decomposition.
+/// Change this value only if you know what you are doing.
+pub fn fullCanonicalDecomposition(code: u21, dest: []u21) u3 {
+    std.debug.assert(code < 0x110000);
+    std.debug.assert(dest.len > 0);
+
+    if (code >= s_base and code < s_base + s_count) {
+        return fullHangulDecomposition(code, dest);
+    }
+
+    if (canonicalDecomposition(code)) |slice| {
+        // NOTE: only the first codepoint can have further decomposition
+        // as stated in UAX #44 section 5.7.3 Character Decomposition Mapping
+        // https://www.unicode.org/reports/tr44/#Character_Decomposition_Mappings
+        const len = fullCanonicalDecomposition(slice[0], dest);
+        if (slice.len > 1) {
+            dest[len] = slice[1];
+            return len + 1;
+        }
+
+        return len;
+    } else {
+        dest[0] = code;
+        return 1;
+    }
+}
+
+pub fn compatibilityDecomposition(code: u21) ?[]const u21 {
+    std.debug.assert(code < 0x110000);
+
+    if (code >= s_base and code < s_base + s_count) {
+        return hangulDecomposition(code);
+    }
+
+    const high_bits = code / decomp_table.bs;
+    const low_bits = code % decomp_table.bs;
+
+    const idx: u32 = @as(u32, @intCast(decomp_table.s1[high_bits])) * decomp_table.bs + low_bits;
+
+    const len = decomp_table.s2_len[idx];
+    if (len == 0) return null;
+
+    const off = decomp_table.s2_off[idx];
+    return decomp_table.codes[off..][0..len];
+}
+
+/// Ensure `dest.len >= 18` to fit every possible decomposition.
+/// Change this value only if you know what you are doing.
+pub fn fullCompatibilityDecomposition(code: u21, dest: []u21) u5 {
+    std.debug.assert(code < 0x110000);
+    std.debug.assert(dest.len > 0);
+
+    if (code >= s_base and code < s_base + s_count) {
+        return fullHangulDecomposition(code, dest);
+    }
+
+    if (compatibilityDecomposition(code)) |slice| {
+        var len: u5 = 0;
+        for (slice) |it| {
+            len += fullCompatibilityDecomposition(it, dest[len..]);
+        }
+        return len;
+    } else {
+        dest[0] = code;
+        return 1;
+    }
+}
+
+// NOTE: The Unicode Standard, Version 16.0 – Core Specification
+// 3.12.2 Hangul Syllable Decomposition
+const s_base = 0xAC00;
+const l_base = 0x1100;
+const v_base = 0x1161;
+const t_base = 0x11A7;
+const l_count = 19;
+const v_count = 21;
+const t_count = 28;
+const n_count = (v_count * t_count);
+const s_count = (l_count * n_count);
+
+threadlocal var hangul_buffer: [2]u21 = undefined;
+
+fn hangulDecomposition(code: u21) []const u21 {
+    std.debug.assert(code >= s_base and code < s_base + s_count);
+
+    const s_index = code - s_base;
+
+    const t_index = s_index % t_count;
+    if (t_index == 0) {
+        const l_index = s_index / n_count;
+        const v_index = (s_index % n_count) / t_count;
+        const l_part = l_base + l_index;
+        const v_part = v_base + v_index;
+
+        hangul_buffer = .{ l_part, v_part };
+    } else {
+        const lv_index = s_index - t_index; // (s_index / t_count) * t_count;
+        const lv_part = s_base + lv_index;
+        const t_part = t_base + t_index;
+
+        hangul_buffer = .{ lv_part, t_part };
+    }
+
+    return &hangul_buffer;
+}
+
+fn fullHangulDecomposition(code: u21, dest: []u21) u2 {
+    std.debug.assert(code >= s_base and code < s_base + s_count);
+    std.debug.assert(dest.len >= 2);
+
+    const s_index = code - s_base;
+
+    const l_index = s_index / n_count;
+    const v_index = (s_index % n_count) / t_count;
+    const t_index = s_index % t_count;
+    const l_part = l_base + l_index;
+    const v_part = v_base + v_index;
+    const t_part = t_base + t_index;
+
+    var len: u2 = 2;
+    len += @intFromBool(t_index > 0);
+    @memcpy(
+        dest[0..len],
+        ([_]u21{ l_part, v_part, t_part })[0..len],
+    );
+    return len;
+}
+
+test "canonDecomp" {
+    var dest: [4]u21 = undefined;
+
+    for (0..0x110000) |i| {
+        _ = fullCanonicalDecomposition(@intCast(i), &dest);
+    }
+
+    try std.testing.expectEqual(1, fullCanonicalDecomposition(0x340, &dest));
+    try std.testing.expectEqualSlices(u21, &[_]u21{0x300}, dest[0..1]);
+
+    try std.testing.expectEqual(2, fullCanonicalDecomposition(0xac00, &dest));
+    try std.testing.expectEqualSlices(u21, &[_]u21{ 0x1100, 0x1161 }, dest[0..2]);
+}
+
+test "compatDecomp" {
+    var dest: [18]u21 = undefined;
+
+    for (0..0x110000) |i| {
+        _ = fullCompatibilityDecomposition(@intCast(i), &dest);
+    }
+}
+
+pub fn combiningClass(code: u21) u8 {
+    std.debug.assert(code < 0x110000);
+
+    return ccc_table.s2[
+        @as(usize, @intCast(
+            ccc_table.s1[code / ccc_table.bs],
+        )) * ccc_table.bs + code % ccc_table.bs
+    ];
+}
+
+test "combiningClass" {
+    try std.testing.expectEqual(0, combiningClass('a'));
+}
+
+pub fn composition(left: u21, right: u21) ?u21 {
+    std.debug.assert(left < 0x110000);
+    std.debug.assert(right < 0x110000);
+
+    if (left >= l_base and left < l_base + l_count) {
+        if (right >= v_base and right < v_base + v_count) {
+            return hangulLVComposition(left, right);
+        }
+
+        return null;
+    }
+
+    if (left >= s_base and (left - s_base) % t_count == 0) {
+        if (right >= t_base and right < t_base + t_count) {
+            return hangulLVTComposition(left, right);
+        }
+
+        return null;
+    }
+
+    const left_id = comp_table.ls2[
+        @as(usize, @intCast(
+            comp_table.ls1[left / comp_table.lbs],
+        )) * comp_table.lbs + left % comp_table.lbs
+    ];
+    if (left_id == std.math.maxInt(u16)) return null;
+
+    const right_id = comp_table.rs2[
+        @as(usize, @intCast(
+            comp_table.rs1[right / comp_table.rbs],
+        )) * comp_table.rbs + right % comp_table.rbs
+    ];
+    if (right_id == std.math.maxInt(u8)) return null;
+
+    const index = left_id * comp_table.width + right_id;
+    const code = comp_table.cs2[
+        @as(usize, @intCast(
+            comp_table.cs1[index / comp_table.cbs],
+        )) * comp_table.cbs + index % comp_table.cbs
+    ];
+    if (code == 0) return null;
+
+    return code;
+}
+
+fn hangulLVComposition(l_part: u21, v_part: u21) ?u21 {
+    std.debug.assert(l_part >= l_base and l_part < l_base + l_count);
+    std.debug.assert(v_part >= v_base and v_part < v_base + v_count);
+
+    const l_index = l_part - l_base;
+    const v_index = v_part - v_base;
+    const lv_index = l_index * n_count + v_index * t_count;
+    return s_base + lv_index;
+}
+
+fn hangulLVTComposition(lv_part: u21, t_part: u21) ?u21 {
+    std.debug.assert(lv_part >= s_base and (lv_part - s_base) % t_count == 0);
+    std.debug.assert(t_part >= t_base and t_part < t_base + t_count);
+
+    const t_index = t_part - t_base;
+    return lv_part + t_index;
+}
+
+test "composition" {
+    try std.testing.expectEqual(0xc1, composition(0x41, 0x301));
+    try std.testing.expectEqual(0xac00, composition(0x1100, 0x1161));
+    try std.testing.expectEqual(0xac01, composition(0xac00, 0x11a8));
+}
+
+pub const QuickCheck = qc_table.QuickCheck;
+pub const Value = qc_table.Value;
+
+pub fn quickCheck(code: u21) QuickCheck {
+    std.debug.assert(code < 0x110000);
+
+    return qc_table.s2[
+        @as(usize, @intCast(
+            qc_table.s1[code / qc_table.bs],
+        )) * qc_table.bs + code % qc_table.bs
+    ];
+}
+
+test {
+    try std.testing.expectEqual(QuickCheck{
+        .nfd = .yes,
+        .nfc = .yes,
+        .nfkd = .yes,
+        .nfkc = .yes,
+    }, quickCheck('a'));
 }
