@@ -71,6 +71,6 @@ pub fn getSimple(code: u21) u21 {
 }
 
 test "getSimple" {
-    try std.testing.expectEqual('a', getSimple('A').?);
-    try std.testing.expectEqual(0x1f80, getSimple(0x1f88).?);
+    try std.testing.expectEqual('a', getSimple('A'));
+    try std.testing.expectEqual(0x1f80, getSimple(0x1f88));
 }
