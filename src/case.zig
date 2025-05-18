@@ -10,7 +10,7 @@ pub const CaseProps = props_table.CaseProps;
 pub const Fold = struct {
     source: codepoint.Iterator,
     codes: []const u21 = &.{},
-    pos: u8,
+    pos: u8 = 0,
 
     pub fn nextSimple(fold: Fold) !?u21 {
         if (try fold.source.next()) |cp| {
@@ -20,7 +20,7 @@ pub const Fold = struct {
         return null;
     }
 
-    pub fn nextFull(fold: Fold) !?u21 {
+    pub fn nextFull(fold: *Fold) !?u21 {
         if (fold.pos < fold.codes.len) {
             defer fold.pos += 1;
             return fold.codes[fold.pos];
@@ -28,9 +28,9 @@ pub const Fold = struct {
 
         if (try fold.source.next()) |cp| {
             if (fullFolding(cp.code)) |full| {
-                fold.source = full;
+                fold.codes = full;
                 fold.pos = 1;
-                return fold.source[0];
+                return fold.codes[0];
             } else {
                 return cp.code;
             }
@@ -39,6 +39,38 @@ pub const Fold = struct {
         return null;
     }
 };
+
+test "Fold" {
+    const input = "HeLlo!";
+    var utf8: codepoint.Utf8 = .{ .bytes = input };
+    var fold: Fold = .{ .source = utf8.iterator() };
+
+    const expected = "hello!";
+    var pos: usize = 0;
+    while (try fold.nextFull()) |code| {
+        var buf: [4]u8 = undefined;
+        const len = try std.unicode.utf8Encode(code, &buf);
+
+        try std.testing.expect(
+            std.mem.startsWith(u8, expected[pos..], buf[0..len]),
+        );
+        pos += len;
+    }
+    try std.testing.expectEqual(expected.len, pos);
+
+    utf8.pos = 0;
+    pos = 0;
+    while (try fold.nextSimple()) |code| {
+        var buf: [4]u8 = undefined;
+        const len = try std.unicode.utf8Encode(code, &buf);
+
+        try std.testing.expect(
+            std.mem.startsWith(u8, expected[pos..], buf[0..len]),
+        );
+        pos += len;
+    }
+    try std.testing.expectEqual(expected.len, pos);
+}
 
 pub fn props(code: u21) CaseProps {
     std.debug.assert(code < 0x110000);
