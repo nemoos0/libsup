@@ -9,6 +9,7 @@ pub const Grapheme = struct {
 
 pub const Iterator = struct {
     source: codepoint.Iterator,
+    // PERF: maybe use a ring buffer instead of an array to avoid copying the data around
     codepoints: [2]?codepoint.Codepoint = .{ null, null },
     segments: [2]Segment = .{ .Any, .Any },
 
@@ -81,13 +82,13 @@ fn getSegment(code: u21) Segment {
 }
 
 const State = struct {
-    ri: Ri = .none,
-    pic: Pic = .none,
-    indic: Indic = .none,
+    ri: Ri = .unknown,
+    pic: Pic = .unknown,
+    indic: Indic = .unknown,
 
-    const Ri = enum { none, after_ri };
-    const Pic = enum { none, after_pic, after_zwj };
-    const Indic = enum { none, after_consonant, after_linker };
+    const Ri = enum { unknown, after_ri };
+    const Pic = enum { unknown, after_pic, after_zwj };
+    const Indic = enum { unknown, after_consonant, after_linker };
 
     pub fn step(state: State, segment: Segment) State {
         return .{
@@ -102,8 +103,8 @@ const State = struct {
         const Table = std.EnumArray(Ri, Row);
 
         const table: Table = comptime blk: {
-            var table: Table = .initFill(.initFill(.none));
-            table.getPtr(.none).set(.RI, .after_ri);
+            var table: Table = .initFill(.initFill(.unknown));
+            table.getPtr(.unknown).set(.RI, .after_ri);
             break :blk table;
         };
 
@@ -115,7 +116,7 @@ const State = struct {
         const Table = std.EnumArray(Pic, Row);
 
         const table: Table = comptime blk: {
-            var table: Table = .initFill(.initFill(.none));
+            var table: Table = .initFill(.initFill(.unknown));
 
             for (&table.values) |*row| row.set(.Pic, .after_pic);
 
@@ -136,7 +137,7 @@ const State = struct {
         const Table = std.EnumArray(Indic, Row);
 
         const table: Table = comptime blk: {
-            var table: Table = .initFill(.initFill(.none));
+            var table: Table = .initFill(.initFill(.unknown));
 
             for (&table.values) |*row| row.set(.IndicConsonant, .after_consonant);
 
