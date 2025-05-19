@@ -46,6 +46,34 @@ pub fn build(b: *std.Build) void {
         }),
     ).step);
 
+    const grapheme_gen = b.addRunArtifact(
+        b.addExecutable(.{
+            .name = "grapheme_gen",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("gen/grapheme.zig"),
+                .target = b.graph.host,
+            }),
+        }),
+    );
+    const grapheme_table = grapheme_gen.addOutputFileArg("grapheme_table.zig");
+
+    const grapheme_mod = b.createModule(.{
+        .root_source_file = b.path("src/grapheme.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    grapheme_mod.addImport("codepoint", codepoint_mod);
+    grapheme_mod.addAnonymousImport("grapheme_table", .{
+        .root_source_file = grapheme_table,
+    });
+
+    test_step.dependOn(&b.addRunArtifact(
+        b.addTest(.{
+            .name = "grapheme_test",
+            .root_module = grapheme_mod,
+        }),
+    ).step);
+
     const decomposition_gen = b.addRunArtifact(
         b.addExecutable(.{
             .name = "decomposition_gen",
