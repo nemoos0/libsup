@@ -1,6 +1,76 @@
 const std = @import("std");
 const ucd = @import("ucd.zig");
 
+// Segment  | CR | LF | Control | NonIndicExtend | IndicLinker | IndicExtendNoZWJ | ZWJ | RI                 | Prepend | SpacingMark | L | V | T | LV | LVT | Pic  | IndicConsonant | Any |
+//
+// Prop     | CR | LF | Control | Extend                                          | ZWJ | Regional_Indicator | Prepend | SpacingMark | L | V | T | LV | LVT | Any                         |
+// Indic    | None                               | Linker      | Extend                 | None                                                                     | Consonant      |     |
+// Pic      | false                                                                                                                                         | true | false                |
+
+/// Intersection between GraphemeBreakProp, IndicConjunctBreak and Extended_Pictographic
+const Segment = enum(u5) {
+    /// GraphemeBreakProp.CR
+    CR,
+    /// GraphemeBreakProp.LF
+    LF,
+    /// GraphemeBreakProp.Control
+    Control,
+    /// GraphemeBreakProp.Extend - IndicConjunctBreak.Linker - IndicConjunctBreak.Extend
+    NonIndicExtend,
+    /// GraphemeBreakProp.ZWJ
+    ZWJ,
+    /// GraphemeBreakProp.Regional_Indicator
+    RI,
+    /// GraphemeBreakProp.Prepend
+    Prepend,
+    /// GraphemeBreakProp.SpacingMark
+    SpacingMark,
+    /// GraphemeBreakProp.L
+    L,
+    /// GraphemeBreakProp.V
+    V,
+    /// GraphemeBreakProp.T
+    T,
+    /// GraphemeBreakProp.LV
+    LV,
+    /// GraphemeBreakProp.LVT
+    LVT,
+    /// IndicConjunctBreak.Consonant
+    IndicConsonant,
+    /// IndicConjunctBreak.Linker
+    IndicLinker,
+    /// IndicConjunctBreak.Extend - GraphemeBreakProp.ZWJ
+    IndicExtendNoZWJ,
+    /// Extended_Pictographic
+    Pic,
+    /// GraphemeBreakProp.Any - IndicConjunctBreak.Consonant - Extended_Pictographic
+    Any,
+};
+
+const GraphemeBreakProp = enum(u4) {
+    CR,
+    LF,
+    Control,
+    Extend,
+    ZWJ,
+    Regional_Indicator,
+    Prepend,
+    SpacingMark,
+    L,
+    V,
+    T,
+    LV,
+    LVT,
+    Any,
+};
+
+const IndicConjunctBreak = enum(u2) {
+    None,
+    Linker,
+    Consonant,
+    Extend,
+};
+
 pub fn main() !void {
     const gpa = std.heap.smp_allocator;
 
@@ -99,48 +169,3 @@ pub fn main() !void {
     try ucd.printConst("s1", s1, writer);
     try ucd.printConst("s2", s2, writer);
 }
-
-const IndicConjunctBreak = enum(u2) {
-    None,
-    Linker,
-    Consonant,
-    Extend,
-};
-
-const GraphemeBreakProp = enum(u4) {
-    CR,
-    LF,
-    Control,
-    Extend,
-    ZWJ,
-    Regional_Indicator,
-    Prepend,
-    SpacingMark,
-    L,
-    V,
-    T,
-    LV,
-    LVT,
-    Any,
-};
-
-const Segment = enum(u5) {
-    CR,
-    LF,
-    Control,
-    NonIndicExtend,
-    ZWJ,
-    RI,
-    Prepend,
-    SpacingMark,
-    L,
-    V,
-    T,
-    LV,
-    LVT,
-    IndicConsonant,
-    IndicLinker,
-    IndicExtendNoZWJ,
-    Pic,
-    Any,
-};
