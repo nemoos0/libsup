@@ -1,14 +1,14 @@
 const std = @import("std");
-const codepoint = @import("codepoint");
+const enc = @import("encodings");
 const grapheme_table = @import("grapheme_table");
 
 pub const Iterator = struct {
-    source: codepoint.Iterator,
+    source: enc.ContextIterator,
     // PERF: maybe use a ring buffer instead of an array to avoid copying the data around
-    codepoints: [2]?codepoint.Codepoint = .{ null, null },
+    codepoints: [2]?enc.Context = .{ null, null },
     segments: [2]Segment = .{ .Any, .Any },
 
-    pub fn init(source: codepoint.Iterator) !Iterator {
+    pub fn init(source: enc.ContextIterator) !Iterator {
         var iter: Iterator = .{ .source = source };
         try iter.read();
         return iter;
@@ -53,7 +53,7 @@ pub const Iterator = struct {
         }
 
         const left = iter.codepoints[0].?;
-        return left.offset + left.len;
+        return left.off + left.len;
     }
 };
 
@@ -221,8 +221,8 @@ const BreakCondition = enum {
 test "Iterator" {
     const input = "Hello";
 
-    var utf8: codepoint.Utf8 = .{ .bytes = input };
-    var graph: Iterator = try .init(utf8.iterator());
+    var utf8: enc.Utf8Decoder = .{ .bytes = input };
+    var graph: Iterator = try .init(utf8.contextIterator());
 
     for (1..6) |expected| {
         try std.testing.expectEqualDeep(expected, try graph.next());
@@ -264,8 +264,8 @@ test "conformance" {
             try graphemes.append(arena, string.items.len);
         }
 
-        var utf8: codepoint.Utf8 = .{ .bytes = string.items };
-        var graph: Iterator = try .init(utf8.iterator());
+        var utf8: enc.Utf8Decoder = .{ .bytes = string.items };
+        var graph: Iterator = try .init(utf8.contextIterator());
 
         for (graphemes.items) |expected| {
             try std.testing.expectEqualDeep(expected, try graph.next());

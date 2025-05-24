@@ -6,16 +6,16 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run unit test");
 
-    const codepoint_mod = b.createModule(.{
-        .root_source_file = b.path("src/codepoint.zig"),
+    const encodings_mod = b.createModule(.{
+        .root_source_file = b.path("src/encodings.zig"),
         .target = target,
         .optimize = optimize,
     });
 
     test_step.dependOn(&b.addRunArtifact(
         b.addTest(.{
-            .name = "codepoint_test",
-            .root_module = codepoint_mod,
+            .name = "encodings_test",
+            .root_module = encodings_mod,
         }),
     ).step);
 
@@ -62,7 +62,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    grapheme_mod.addImport("codepoint", codepoint_mod);
+    grapheme_mod.addImport("encodings", encodings_mod);
     grapheme_mod.addAnonymousImport("grapheme_table", .{
         .root_source_file = grapheme_table,
     });
@@ -123,7 +123,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    normalization_mod.addImport("codepoint", codepoint_mod);
+    normalization_mod.addImport("encodings", encodings_mod);
     normalization_mod.addAnonymousImport("combining_class_table", .{ .root_source_file = combining_class_table });
     normalization_mod.addAnonymousImport("decomposition_table", .{ .root_source_file = decomposition_table });
     normalization_mod.addAnonymousImport("composition_table", .{ .root_source_file = composition_table });
@@ -174,7 +174,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    case_mod.addImport("codepoint", codepoint_mod);
+    case_mod.addImport("encodings", encodings_mod);
     case_mod.addAnonymousImport("case_props_table", .{ .root_source_file = case_props_table });
     case_mod.addAnonymousImport("case_mapping_table", .{ .root_source_file = case_mapping_table });
     case_mod.addAnonymousImport("case_folding_table", .{ .root_source_file = case_folding_table });

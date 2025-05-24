@@ -1,5 +1,5 @@
 const std = @import("std");
-const codepoint = @import("codepoint");
+const enc = @import("encodings");
 
 const qc_table = @import("quick_check_table");
 const ccc_table = @import("combining_class_table");
@@ -22,7 +22,7 @@ pub const Form = packed struct(u2) {
 pub fn Normalizer(comptime form: Form) type {
     return struct {
         gpa: Allocator,
-        source: codepoint.Iterator,
+        source: enc.CodeIterator,
         codes: ArrayListUnmanaged(u21),
         classes: ArrayListUnmanaged(u8),
         /// Number of codes already sorted
@@ -53,7 +53,7 @@ pub fn Normalizer(comptime form: Form) type {
         ///
         /// UAX #15 section 13 Stream-Safe Text Format
         /// https://www.unicode.org/reports/tr15/#UAX15-D3
-        pub fn init(gpa: Allocator, source: codepoint.Iterator) Allocator.Error!Self {
+        pub fn init(gpa: Allocator, source: enc.CodeIterator) Allocator.Error!Self {
             return .{
                 .gpa = gpa,
                 .source = source,
@@ -103,9 +103,9 @@ pub fn Normalizer(comptime form: Form) type {
             var index: ?usize = std.mem.indexOfScalarPos(u8, norm.classes.items, 1, 0);
 
             while (index == null) {
-                if (try norm.source.next()) |cp| {
+                if (try norm.source.next()) |code| {
                     const pos = norm.codes.items.len;
-                    try norm.appendCodeDecomposition(cp.code);
+                    try norm.appendCodeDecomposition(code);
                     index = std.mem.indexOfScalarPos(u8, norm.classes.items, @max(1, pos), 0);
                 } else {
                     return null;
@@ -246,14 +246,17 @@ fn expectEqualForm(
     var buffer: [256]u8 = undefined;
     var fba: std.heap.FixedBufferAllocator = .init(&buffer);
 
-    var original_utf8: codepoint.Utf8 = .{ .bytes = original };
-    var norm: Normalizer(form) = try .init(fba.allocator(), original_utf8.iterator());
+    var original_utf8: enc.Utf8Decoder = .{ .bytes = original };
+    var norm: Normalizer(form) = try .init(
+        fba.allocator(),
+        original_utf8.codeIterator(),
+    );
 
-    var expected_utf8: codepoint.Utf8 = .{ .bytes = expected };
+    var expected_utf8: enc.Utf8Decoder = .{ .bytes = expected };
 
-    while (expected_utf8.next()) |expected_code| {
+    while (expected_utf8.nextCode()) |expected_code| {
         const actual_code = try norm.next();
-        try std.testing.expectEqual(expected_code.code, actual_code.?);
+        try std.testing.expectEqual(expected_code, actual_code.?);
     }
     try std.testing.expectEqual(null, try norm.next());
 }

@@ -1,5 +1,5 @@
 const std = @import("std");
-const codepoint = @import("codepoint");
+const enc = @import("encodings");
 
 const props_table = @import("case_props_table");
 const mapping_table = @import("case_mapping_table");
@@ -8,13 +8,13 @@ const folding_table = @import("case_folding_table");
 pub const CaseProps = props_table.CaseProps;
 
 pub const Fold = struct {
-    source: codepoint.Iterator,
+    source: enc.CodeIterator,
     codes: []const u21 = &.{},
     pos: u8 = 0,
 
     pub fn nextSimple(fold: Fold) !?u21 {
-        if (try fold.source.next()) |cp| {
-            return simpleFolding(cp.code);
+        if (try fold.source.next()) |code| {
+            return simpleFolding(code);
         }
 
         return null;
@@ -26,13 +26,13 @@ pub const Fold = struct {
             return fold.codes[fold.pos];
         }
 
-        if (try fold.source.next()) |cp| {
-            if (fullFolding(cp.code)) |full| {
+        if (try fold.source.next()) |code| {
+            if (fullFolding(code)) |full| {
                 fold.codes = full;
                 fold.pos = 1;
                 return fold.codes[0];
             } else {
-                return cp.code;
+                return code;
             }
         }
 
@@ -42,8 +42,8 @@ pub const Fold = struct {
 
 test "Fold" {
     const input = "HeLlo!";
-    var utf8: codepoint.Utf8 = .{ .bytes = input };
-    var fold: Fold = .{ .source = utf8.iterator() };
+    var utf8: enc.Utf8Decoder = .{ .bytes = input };
+    var fold: Fold = .{ .source = utf8.codeIterator() };
 
     const expected = "hello!";
     var pos: usize = 0;
