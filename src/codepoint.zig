@@ -3,6 +3,22 @@ const unicode = std.unicode;
 
 const assert = std.debug.assert;
 
+const Iterator2 = struct {
+    context: *anyopaque,
+    nextFn: *const fn (*anyopaque) anyerror!?u21,
+};
+
+const IteratorWithContext = struct {
+    context: *anyopaque,
+    nextFn: *const fn (*anyopaque) anyerror!?Context,
+};
+
+pub const Context = struct {
+    offset: usize,
+    code: u21,
+    len: u3,
+};
+
 pub const Codepoint = struct {
     offset: usize,
     code: u21,
@@ -18,13 +34,19 @@ pub const Iterator = struct {
     }
 };
 
-/// Must be used only with slices which are known to contain valid utf8
-/// encoded text.
-pub const Utf8Unchecked = struct {
+pub const Utf8 = struct {
     bytes: []const u8,
     pos: usize = 0,
 
-    pub fn next(utf8: *Utf8Unchecked) ?Codepoint {
+    pub fn init(bytes: []const u8) !Utf8 {
+        if (!std.unicode.utf8ValidateSlice(bytes)) {
+            return error.InvalidUtf8;
+        }
+
+        return .{ .bytes = bytes };
+    }
+
+    pub fn next(utf8: *Utf8) ?Codepoint {
         if (utf8.pos >= utf8.bytes.len) return null;
 
         var codepoint: Codepoint = .{
@@ -79,32 +101,6 @@ pub const Utf8Unchecked = struct {
         }
 
         unreachable;
-    }
-
-    pub fn iterator(utf8: *Utf8Unchecked) Iterator {
-        return .{ .context = utf8, .nextFn = typeErasedNextFn };
-    }
-
-    fn typeErasedNextFn(context: *anyopaque) anyerror!?Codepoint {
-        const utf8: *@This() = @alignCast(@ptrCast(context));
-        return utf8.next();
-    }
-};
-
-pub const Utf8 = struct {
-    bytes: []const u8,
-    pos: usize = 0,
-
-    pub fn next(utf8: *Utf8) !?Codepoint {
-        if (utf8.pos >= utf8.bytes.len) return null;
-
-        const first_byte = utf8.bytes[utf8.pos];
-        const len = try unicode.utf8ByteSequenceLength(first_byte);
-        if (utf8.bytes[utf8.pos..].len < len) return error.Utf8ExpectedContinuation;
-        const code = try unicode.utf8Decode(utf8.bytes[utf8.pos..][0..len]);
-
-        defer utf8.pos += len;
-        return .{ .offset = utf8.pos, .len = len, .code = code };
     }
 
     pub fn iterator(utf8: *Utf8) Iterator {
@@ -204,8 +200,7 @@ test "iterators" {
     };
     defer gpa.free(buf);
 
-    var utf8_unchecked: Utf8Unchecked = .{ .bytes = buf };
-    var utf8: Utf8 = .{ .bytes = buf };
+    var utf8: Utf8 = try .init(buf);
 
     var stream = std.io.fixedBufferStream(buf);
     var buffered_reader = fromReader(stream.reader());
@@ -218,7 +213,6 @@ test "iterators" {
         const expected: Codepoint = .{ .offset = offset, .len = len, .code = code };
         offset += len;
 
-        try std.testing.expectEqualDeep(expected, try utf8_unchecked.iterator().next());
         try std.testing.expectEqualDeep(expected, try utf8.iterator().next());
         try std.testing.expectEqualDeep(expected, try buffered_reader.iterator().next());
     }

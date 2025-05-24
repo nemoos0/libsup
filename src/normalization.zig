@@ -246,10 +246,10 @@ fn expectEqualForm(
     var buffer: [256]u8 = undefined;
     var fba: std.heap.FixedBufferAllocator = .init(&buffer);
 
-    var original_utf8: codepoint.Utf8Unchecked = .{ .bytes = original };
+    var original_utf8: codepoint.Utf8 = .{ .bytes = original };
     var norm: Normalizer(form) = try .init(fba.allocator(), original_utf8.iterator());
 
-    var expected_utf8: codepoint.Utf8Unchecked = .{ .bytes = expected };
+    var expected_utf8: codepoint.Utf8 = .{ .bytes = expected };
 
     while (expected_utf8.next()) |expected_code| {
         const actual_code = try norm.next();
