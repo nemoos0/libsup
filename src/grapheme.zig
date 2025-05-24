@@ -2,11 +2,6 @@ const std = @import("std");
 const codepoint = @import("codepoint");
 const grapheme_table = @import("grapheme_table");
 
-pub const Grapheme = struct {
-    offset: usize,
-    len: u16,
-};
-
 pub const Iterator = struct {
     source: codepoint.Iterator,
     // PERF: maybe use a ring buffer instead of an array to avoid copying the data around
@@ -32,19 +27,15 @@ pub const Iterator = struct {
         }
     }
 
-    pub fn next(iter: *Iterator) !?Grapheme {
+    pub fn next(iter: *Iterator) !?usize {
         if (iter.codepoints[1] == null) return null;
 
-        var grapheme: Grapheme = .{
-            .offset = iter.codepoints[1].?.offset,
-            .len = iter.codepoints[1].?.len,
-        };
-
-        try iter.read();
-
         var state: State = .{};
+        while (true) {
+            try iter.read();
 
-        while (iter.codepoints[1]) |right| {
+            if (iter.codepoints[1] == null) break;
+
             state = state.step(iter.segments[0]);
 
             const break_condition: BreakCondition = .init(
@@ -59,13 +50,10 @@ pub const Iterator = struct {
                 .unless_pic => if (state.pic != .after_zwj) break,
                 .unless_indic => if (state.indic != .after_linker) break,
             }
-
-            grapheme.len += right.len;
-
-            try iter.read();
         }
 
-        return grapheme;
+        const left = iter.codepoints[0].?;
+        return left.offset + left.len;
     }
 };
 
@@ -236,13 +224,7 @@ test "Iterator" {
     var utf8: codepoint.Utf8 = .{ .bytes = input };
     var graph: Iterator = try .init(utf8.iterator());
 
-    for (&[_]Grapheme{
-        .{ .offset = 0, .len = 1 },
-        .{ .offset = 1, .len = 1 },
-        .{ .offset = 2, .len = 1 },
-        .{ .offset = 3, .len = 1 },
-        .{ .offset = 4, .len = 1 },
-    }) |expected| {
+    for (1..6) |expected| {
         try std.testing.expectEqualDeep(expected, try graph.next());
     }
     try std.testing.expectEqual(null, try graph.next());
@@ -262,17 +244,12 @@ test "conformance" {
         if (content.len == 0) continue;
 
         var string: std.ArrayListUnmanaged(u8) = .empty;
-        var graphemes: std.ArrayListUnmanaged(Grapheme) = .empty;
+        var graphemes: std.ArrayListUnmanaged(usize) = .empty;
 
         const without_last_column = content["÷ ".len..std.mem.lastIndexOf(u8, content, " ÷").?];
 
         var codepoint_block_iter = std.mem.tokenizeSequence(u8, without_last_column, " ÷ ");
         while (codepoint_block_iter.next()) |codepoint_block| {
-            var grapheme: Grapheme = .{
-                .offset = string.items.len,
-                .len = undefined,
-            };
-
             var codepoint_iter = std.mem.tokenizeSequence(u8, codepoint_block, " × ");
             while (codepoint_iter.next()) |codepoint_slice| {
                 const code = try std.fmt.parseInt(u21, codepoint_slice, 16);
@@ -284,8 +261,7 @@ test "conformance" {
                 );
             }
 
-            grapheme.len = @intCast(string.items.len - grapheme.offset);
-            try graphemes.append(arena, grapheme);
+            try graphemes.append(arena, string.items.len);
         }
 
         var utf8: codepoint.Utf8 = .{ .bytes = string.items };
