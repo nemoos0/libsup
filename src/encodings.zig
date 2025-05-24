@@ -34,7 +34,8 @@ pub const Utf8Decoder = struct {
     const lengths_table: [256]u3 align(32) = blk: {
         var table: [256]u3 = .{0} ** 256;
 
-        @memset(table[0x00..0x8f], 1);
+        // 0000 0000 - 0111 1111
+        @memset(table[0x00..0x80], 1);
         // 1100 0000 - 1101 1111
         @memset(table[0xc0..0xe0], 2);
         // 1110 0000 - 1110 1111
