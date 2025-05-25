@@ -185,4 +185,14 @@ pub fn build(b: *std.Build) void {
             .root_module = case_mod,
         }),
     ).step);
+
+    const sup_mod = b.addModule("sup", .{
+        .root_source_file = b.path("src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    sup_mod.addImport("encodings", encodings_mod);
+    sup_mod.addImport("grapheme", grapheme_mod);
+    sup_mod.addImport("case", case_mod);
+    sup_mod.addImport("normalization", normalization_mod);
 }
