@@ -88,8 +88,6 @@ pub const Utf8Decoder = struct {
             },
             else => unreachable,
         }
-
-        unreachable;
     }
 
     pub fn nextCode(utf8: *Utf8Decoder) ?u21 {
