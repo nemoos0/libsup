@@ -99,6 +99,15 @@ pub fn Normalizer(comptime form: Form) type {
             return norm.codes.items[0];
         }
 
+        pub fn iterator(norm: *Self) enc.CodeIterator {
+            return .{ .context = norm, .nextFn = typeErasedNext };
+        }
+
+        fn typeErasedNext(ptr: *anyopaque) !?u21 {
+            const norm: *Self = @alignCast(@ptrCast(ptr));
+            return norm.next();
+        }
+
         fn indexOfSecondStarter(norm: *Self) !?usize {
             var index: ?usize = std.mem.indexOfScalarPos(u8, norm.classes.items, 1, 0);
 

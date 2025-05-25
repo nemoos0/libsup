@@ -7,20 +7,12 @@ const folding_table = @import("case_folding_table");
 
 pub const CaseProps = props_table.CaseProps;
 
-pub const Fold = struct {
+pub const FullFold = struct {
     source: enc.CodeIterator,
     codes: []const u21 = &.{},
     pos: u8 = 0,
 
-    pub fn nextSimple(fold: Fold) !?u21 {
-        if (try fold.source.next()) |code| {
-            return simpleFolding(code);
-        }
-
-        return null;
-    }
-
-    pub fn nextFull(fold: *Fold) !?u21 {
+    pub fn next(fold: *FullFold) !?u21 {
         if (fold.pos < fold.codes.len) {
             defer fold.pos += 1;
             return fold.codes[fold.pos];
@@ -38,16 +30,25 @@ pub const Fold = struct {
 
         return null;
     }
+
+    pub fn iterator(norm: *FullFold) enc.CodeIterator {
+        return .{ .context = norm, .nextFn = typeErasedNext };
+    }
+
+    fn typeErasedNext(ptr: *anyopaque) !?u21 {
+        const norm: *FullFold = @alignCast(@ptrCast(ptr));
+        return norm.next();
+    }
 };
 
-test "Fold" {
+test "FullFold" {
     const input = "HeLlo!";
     var utf8: enc.Utf8Decoder = .{ .bytes = input };
-    var fold: Fold = .{ .source = utf8.codeIterator() };
+    var fold: FullFold = .{ .source = utf8.codeIterator() };
 
     const expected = "hello!";
     var pos: usize = 0;
-    while (try fold.nextFull()) |code| {
+    while (try fold.next()) |code| {
         var buf: [4]u8 = undefined;
         const len = try std.unicode.utf8Encode(code, &buf);
 
@@ -57,10 +58,37 @@ test "Fold" {
         pos += len;
     }
     try std.testing.expectEqual(expected.len, pos);
+}
 
-    utf8.pos = 0;
-    pos = 0;
-    while (try fold.nextSimple()) |code| {
+pub const SimpleFold = struct {
+    source: enc.CodeIterator,
+
+    pub fn next(fold: SimpleFold) !?u21 {
+        if (try fold.source.next()) |code| {
+            return simpleFolding(code);
+        }
+
+        return null;
+    }
+
+    pub fn iterator(norm: *SimpleFold) enc.CodeIterator {
+        return .{ .context = norm, .nextFn = typeErasedNext };
+    }
+
+    fn typeErasedNext(ptr: *anyopaque) !?u21 {
+        const norm: *SimpleFold = @alignCast(@ptrCast(ptr));
+        return norm.next();
+    }
+};
+
+test "SimpleFold" {
+    const input = "HeLlo!";
+    var utf8: enc.Utf8Decoder = .{ .bytes = input };
+    var fold: SimpleFold = .{ .source = utf8.codeIterator() };
+
+    const expected = "hello!";
+    var pos: usize = 0;
+    while (try fold.next()) |code| {
         var buf: [4]u8 = undefined;
         const len = try std.unicode.utf8Encode(code, &buf);
 
