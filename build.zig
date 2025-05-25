@@ -89,6 +89,35 @@ pub fn build(b: *std.Build) void {
         }),
     ).step);
 
+    const word_gen = b.addRunArtifact(
+        b.addExecutable(.{
+            .name = "word_gen",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("gen/word.zig"),
+                .target = b.graph.host,
+            }),
+        }),
+    );
+    const word_table = word_gen.addOutputFileArg("word_table.zig");
+
+    const word_mod = b.createModule(.{
+        .root_source_file = b.path("src/word.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    word_mod.addImport("code_point", code_point_mod);
+    word_mod.addImport("utf8", utf8_mod);
+    word_mod.addAnonymousImport("word_table", .{
+        .root_source_file = word_table,
+    });
+
+    test_step.dependOn(&b.addRunArtifact(
+        b.addTest(.{
+            .name = "word_test",
+            .root_module = word_mod,
+        }),
+    ).step);
+
     const decomposition_gen = b.addRunArtifact(
         b.addExecutable(.{
             .name = "decomposition_gen",
