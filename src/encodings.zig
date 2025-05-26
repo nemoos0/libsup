@@ -164,9 +164,9 @@ pub fn ReaderDecoder(comptime buffer_size: usize, comptime ReaderType: type) typ
             if (byte < 0x80) return .{ .off = off, .len = 1, .code = byte };
 
             var class = classes[byte];
-            var state = transitions.get(.valid).get(class);
+            var state = transitions.get(.accept).get(class);
 
-            if (state == .invalid) return error.Utf8InvalidStartByte;
+            if (state == .reject) return error.Utf8InacceptStartByte;
             if (self.start >= self.end) {
                 self.base_offset += self.end;
                 self.end = try self.unbuffered_reader.read(&self.buf);
@@ -182,8 +182,8 @@ pub fn ReaderDecoder(comptime buffer_size: usize, comptime ReaderType: type) typ
             code = (byte & 0x3f) | (code << 6);
             self.start += 1;
 
-            if (state == .valid) return .{ .off = off, .len = 2, .code = code };
-            if (state == .invalid) return error.Utf8ExpectedContinuation;
+            if (state == .accept) return .{ .off = off, .len = 2, .code = code };
+            if (state == .reject) return error.Utf8ExpectedContinuation;
             if (self.start >= self.end) {
                 self.base_offset += self.end;
                 self.end = try self.unbuffered_reader.read(&self.buf);
@@ -197,8 +197,8 @@ pub fn ReaderDecoder(comptime buffer_size: usize, comptime ReaderType: type) typ
             code = (byte & 0x3f) | (code << 6);
             self.start += 1;
 
-            if (state == .valid) return .{ .off = off, .len = 3, .code = code };
-            if (state == .invalid) return error.InvalidUtf8;
+            if (state == .accept) return .{ .off = off, .len = 3, .code = code };
+            if (state == .reject) return error.InacceptUtf8;
             if (self.start >= self.end) {
                 self.base_offset += self.end;
                 self.end = try self.unbuffered_reader.read(&self.buf);
@@ -212,8 +212,8 @@ pub fn ReaderDecoder(comptime buffer_size: usize, comptime ReaderType: type) typ
             code = (byte & 0x3f) | (code << 6);
             self.start += 1;
 
-            if (state == .invalid) return error.InvalidUtf8;
-            assert(state == .valid);
+            if (state == .reject) return error.InacceptUtf8;
+            assert(state == .accept);
             return .{ .off = off, .len = 4, .code = code };
         }
 
@@ -256,40 +256,35 @@ test "ReaderDecoder" {
 }
 
 const Class = enum(u4) {
-    /// 0x00 - 0x7f
-    ascii,
-
-    /// 0x80 - 0x8f
-    extention_low,
-    /// 0x90 - 0x9f
-    extention_mid,
-    /// 0xa0 - 0xbf
-    extention_high,
-
-    /// 0xc0 - 0xc1 | 0xf5 - 0xff
-    invalid,
-
-    /// 0xc2 - 0xdf
-    two_byte,
-
-    /// 0xe0
-    three_byte_overlong,
-    /// 0xe1 - 0xec | 0xee - 0xef
-    three_byte,
-    /// 0xed
-    three_byte_surrogate,
-
-    /// 0xf0
-    four_byte_overlong,
-    /// 0xf1 - 0xf3
-    four_byte,
-    /// 0xf4
-    four_byte_too_large,
+    /// ASCII 0x00 - 0x7f
+    b1,
+    /// Continuation bytes 0x80 - 0x8f
+    c1,
+    /// Continuation bytes 0x90 - 0x9f
+    c2,
+    /// Continuation bytes 0xa0 - 0xbf
+    c3,
+    /// Invalid 0xc0 - 0xc1 | 0xf5 - 0xff
+    xx,
+    /// Two byte sequence 0xc2 - 0xdf
+    b2,
+    /// Three byte sequence overflow 0xe0
+    b3o,
+    /// Three byte sequence 0xe1 - 0xec | 0xee - 0xef
+    b3,
+    /// Three byte sequence surrogate 0xed
+    b3s,
+    /// Four byte sequence overflow 0xf0
+    b4o,
+    /// Four byte sequence 0xf1 - 0xf3
+    b4,
+    /// Four byte sequence too long 0xf4
+    b4l,
 };
 
 const State = enum(u4) {
-    valid,
-    invalid,
+    accept,
+    reject,
 
     one_more,
     two_more,
@@ -302,88 +297,65 @@ const State = enum(u4) {
     four_byte_too_large,
 };
 
-const classes: [256]Class = blk: {
-    var c: [256]Class = .{.invalid} ** 256;
-
-    @memset(c[0x00..0x80], .ascii);
-
-    @memset(c[0x80..0x90], .extention_low);
-    @memset(c[0x90..0xa0], .extention_mid);
-    @memset(c[0xa0..0xc0], .extention_high);
-
-    @memset(c[0xc0..0xc2], .invalid);
-    @memset(c[0xc2..0xe0], .two_byte);
-
-    c[0xe0] = .three_byte_overlong;
-    @memset(c[0xe1..0xed], .three_byte);
-    c[0xed] = .three_byte_surrogate;
-    @memset(c[0xee..0xf0], .three_byte);
-
-    c[0xf0] = .four_byte_overlong;
-    @memset(c[0xf1..0xf4], .four_byte);
-    c[0xf4] = .four_byte_too_large;
-
-    @memset(c[0xf5..], .invalid);
-
-    break :blk c;
+const classes: [256]Class = .{
+    // ASCII
+    .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, // 0x0f
+    .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, // 0x1f
+    .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, // 0x2f
+    .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, // 0x3f
+    .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, // 0x4f
+    .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, // 0x5f
+    .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, // 0x6f
+    .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, .b1, // 0x7f
+    // Continuation
+    .c1, .c1, .c1, .c1, .c1, .c1, .c1, .c1, .c1, .c1, .c1, .c1, .c1, .c1, .c1, .c1, // 0x8f
+    .c2, .c2, .c2, .c2, .c2, .c2, .c2, .c2, .c2, .c2, .c2, .c2, .c2, .c2, .c2, .c2, // 0x9f
+    .c3, .c3, .c3, .c3, .c3, .c3, .c3, .c3, .c3, .c3, .c3, .c3, .c3, .c3, .c3, .c3, // 0xaf
+    .c3, .c3, .c3, .c3, .c3, .c3, .c3, .c3, .c3, .c3, .c3, .c3, .c3, .c3, .c3, .c3, // 0xbf
+    // Two bytes sequences
+    .xx, .xx, .b2, .b2, .b2, .b2, .b2, .b2, .b2, .b2, .b2, .b2, .b2, .b2, .b2, .b2, // 0xcf
+    .b2, .b2, .b2, .b2, .b2, .b2, .b2, .b2, .b2, .b2, .b2, .b2, .b2, .b2, .b2, .b2, // 0xdf
+    // Three bytes sequences
+    .b3o, .b3, .b3, .b3, .b3, .b3, .b3, .b3, .b3, .b3, .b3, .b3, .b3, .b3s, .b3, .b3, // 0xef
+    // Four bytes sequences
+    .b4o, .b4, .b4, .b4, .b4l, .xx, .xx, .xx, .xx, .xx, .xx, .xx, .xx, .xx, .xx, .xx, // 0xff
 };
 
-const masks: std.EnumArray(Class, u8) = .init(.{
-    .ascii = 0xff,
+const transitions: std.EnumArray(State, std.EnumArray(Class, State)) = .init(.{
+    .accept = .initDefault(.reject, .{
+        .b1 = .accept,
+        .b2 = .one_more,
+        .b3 = .two_more,
+        .b4 = .three_more,
+        .b3o = .three_byte_overlong,
+        .b3s = .three_byte_surrogate,
+        .b4o = .four_byte_overlong,
+        .b4l = .four_byte_too_large,
+    }),
+    .reject = .initDefault(.reject, .{}),
 
-    .extention_low = 0x3f,
-    .extention_mid = 0x3f,
-    .extention_high = 0x3f,
+    .one_more = .initDefault(.reject, .{ .c1 = .accept, .c2 = .accept, .c3 = .accept }),
+    .two_more = .initDefault(.reject, .{ .c1 = .one_more, .c2 = .one_more, .c3 = .one_more }),
+    .three_more = .initDefault(.reject, .{ .c1 = .two_more, .c2 = .two_more, .c3 = .two_more }),
 
-    .invalid = 0x00,
+    .three_byte_overlong = .initDefault(.reject, .{ .c3 = .one_more }),
+    .three_byte_surrogate = .initDefault(.reject, .{ .c1 = .one_more, .c2 = .one_more }),
 
-    .two_byte = 0x1f,
-
-    .three_byte_overlong = 0x0f,
-    .three_byte = 0x0f,
-    .three_byte_surrogate = 0x0f,
-
-    .four_byte_overlong = 0x07,
-    .four_byte = 0x07,
-    .four_byte_too_large = 0x07,
+    .four_byte_overlong = .initDefault(.reject, .{ .c2 = .two_more, .c3 = .two_more }),
+    .four_byte_too_large = .initDefault(.reject, .{ .c1 = .two_more }),
 });
 
-const transitions: std.EnumArray(State, std.EnumArray(Class, State)) = blk: {
-    var t: std.EnumArray(State, std.EnumArray(Class, State)) = .initFill(.initFill(.invalid));
-
-    t.getPtr(.valid).set(.ascii, State.valid);
-
-    t.getPtr(.valid).set(.two_byte, State.one_more);
-
-    t.getPtr(.valid).set(.three_byte, State.two_more);
-    t.getPtr(.valid).set(.three_byte_overlong, State.three_byte_overlong);
-    t.getPtr(.valid).set(.three_byte_surrogate, State.three_byte_surrogate);
-
-    t.getPtr(.valid).set(.four_byte, State.three_more);
-    t.getPtr(.valid).set(.four_byte_overlong, State.four_byte_overlong);
-    t.getPtr(.valid).set(.four_byte_too_large, State.four_byte_too_large);
-
-    t.getPtr(.one_more).set(.extention_low, State.valid);
-    t.getPtr(.one_more).set(.extention_mid, State.valid);
-    t.getPtr(.one_more).set(.extention_high, State.valid);
-
-    t.getPtr(.two_more).set(.extention_low, State.one_more);
-    t.getPtr(.two_more).set(.extention_mid, State.one_more);
-    t.getPtr(.two_more).set(.extention_high, State.one_more);
-
-    t.getPtr(.three_more).set(.extention_low, State.two_more);
-    t.getPtr(.three_more).set(.extention_mid, State.two_more);
-    t.getPtr(.three_more).set(.extention_high, State.two_more);
-
-    t.getPtr(.three_byte_overlong).set(.extention_high, State.one_more);
-
-    t.getPtr(.three_byte_surrogate).set(.extention_low, State.one_more);
-    t.getPtr(.three_byte_surrogate).set(.extention_mid, State.one_more);
-
-    t.getPtr(.four_byte_overlong).set(.extention_mid, State.two_more);
-    t.getPtr(.four_byte_overlong).set(.extention_high, State.two_more);
-
-    t.getPtr(.four_byte_too_large).set(.extention_low, State.two_more);
-
-    break :blk t;
-};
+const masks: std.EnumArray(Class, u8) = .init(.{
+    .b1 = 0xff,
+    .b2 = 0x1f,
+    .b3 = 0x0f,
+    .b4 = 0x07,
+    .b3o = 0x0f,
+    .b3s = 0x0f,
+    .b4o = 0x07,
+    .b4l = 0x07,
+    .c1 = 0x3f,
+    .c2 = 0x3f,
+    .c3 = 0x3f,
+    .xx = 0x00,
+});
