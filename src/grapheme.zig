@@ -4,27 +4,17 @@ const grapheme_table = @import("grapheme_table");
 
 pub const Iterator = struct {
     source: enc.ContextIterator,
-    // PERF: maybe use a ring buffer instead of an array to avoid copying the data around
     codepoints: [2]?enc.Context = .{ null, null },
-    segments: [2]Segment = .{ .Any, .Any },
 
     pub fn init(source: enc.ContextIterator) !Iterator {
         var iter: Iterator = .{ .source = source };
-        try iter.read();
+        try iter.advance();
         return iter;
     }
 
-    fn read(iter: *Iterator) !void {
+    fn advance(iter: *Iterator) !void {
         iter.codepoints[0] = iter.codepoints[1];
-        iter.segments[0] = iter.segments[1];
-
-        if (try iter.source.next()) |cp| {
-            iter.codepoints[1] = cp;
-            iter.segments[1] = getSegment(cp.code);
-        } else {
-            iter.codepoints[1] = null;
-            iter.segments[1] = .Any;
-        }
+        iter.codepoints[1] = try iter.source.next();
     }
 
     pub fn next(iter: *Iterator) !?usize {
@@ -32,16 +22,26 @@ pub const Iterator = struct {
 
         var state: State = .{};
         while (true) {
-            try iter.read();
+            try iter.advance();
 
             if (iter.codepoints[1] == null) break;
 
-            state = state.step(iter.segments[0]);
+            const left = iter.codepoints[0].?.code;
+            const right = iter.codepoints[1].?.code;
 
-            const break_condition: BreakCondition = .init(
-                iter.segments[0],
-                iter.segments[1],
-            );
+            if (right < 0x300 and // Not an Extend/SpacingMark/ZWJ
+                left < 0x600 // Not a Prepend
+            ) {
+                if (left == '\r' and right == '\n') try iter.advance();
+                break;
+            }
+
+            const lseg = getSegment(left);
+            const rseg = getSegment(right);
+
+            state = state.step(lseg);
+
+            const break_condition: BreakCondition = .init(lseg, rseg);
 
             switch (break_condition) {
                 .always => break,
@@ -268,7 +268,10 @@ test "conformance" {
         var graph: Iterator = try .init(utf8.contextIterator());
 
         for (graphemes.items) |expected| {
-            try std.testing.expectEqualDeep(expected, try graph.next());
+            std.testing.expectEqualDeep(expected, try graph.next()) catch |err| {
+                std.debug.print("{s}\n", .{line});
+                return err;
+            };
         }
         try std.testing.expectEqual(null, try graph.next());
     }
