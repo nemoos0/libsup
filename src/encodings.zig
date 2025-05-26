@@ -31,19 +31,19 @@ pub const Utf8Decoder = struct {
     bytes: []const u8,
     pos: usize = 0,
 
-    const lengths_table: [256]u3 align(32) = blk: {
-        var table: [256]u3 = .{0} ** 256;
+    const lengths_table: [16]u3 align(16) = blk: {
+        var t: [16]u3 = .{0} ** 16;
 
         // 0000 0000 - 0111 1111
-        @memset(table[0x00..0x80], 1);
+        @memset(t[0x0..0x8], 1);
         // 1100 0000 - 1101 1111
-        @memset(table[0xc0..0xe0], 2);
+        @memset(t[0xc..0xe], 2);
         // 1110 0000 - 1110 1111
-        @memset(table[0xe0..0xf0], 3);
+        @memset(t[0xe..0xf], 3);
         // 1111 0000 - 1111 0111
-        @memset(table[0xf0..0xf8], 4);
+        @memset(t[0xf..], 4);
 
-        break :blk table;
+        break :blk t;
     };
 
     pub fn init(bytes: []const u8) !Utf8Decoder {
@@ -57,18 +57,24 @@ pub const Utf8Decoder = struct {
     pub fn nextContext(utf8: *Utf8Decoder) ?Context {
         if (utf8.pos >= utf8.bytes.len) return null;
 
+        const first_byte = utf8.bytes[utf8.pos];
+        utf8.pos += 1;
+
+        if (first_byte < 0x80) return .{
+            .off = utf8.pos - 1,
+            .len = 1,
+            .code = first_byte,
+        };
+
         var context: Context = .{
-            .off = utf8.pos,
+            .off = utf8.pos - 1,
             .len = undefined,
             .code = undefined,
         };
 
-        const first_byte = utf8.bytes[utf8.pos];
-        utf8.pos += 1;
-        switch (lengths_table[first_byte]) {
-            inline 1...4 => |len| {
+        switch (lengths_table[first_byte >> 4]) {
+            inline 2...4 => |len| {
                 const mask = switch (len) {
-                    1 => 0xff,
                     2 => 0x1f,
                     3 => 0x0f,
                     4 => 0x07,
@@ -79,8 +85,7 @@ pub const Utf8Decoder = struct {
                 context.code = first_byte & mask;
 
                 inline for (1..len) |_| {
-                    context.code <<= 6;
-                    context.code |= utf8.bytes[utf8.pos] & 0b0011_1111;
+                    context.code = (utf8.bytes[utf8.pos] & 0x3f) | (context.code << 6);
                     utf8.pos += 1;
                 }
 
