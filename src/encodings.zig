@@ -147,6 +147,7 @@ pub fn ReaderDecoder(comptime buffer_size: usize, comptime ReaderType: type) typ
 
         const Self = @This();
 
+        /// https://bjoern.hoehrmann.de/utf-8/decoder/dfa
         pub fn nextContext(self: *Self) !?Context {
             if (self.start >= self.end) {
                 self.base_offset += self.end;
@@ -155,35 +156,65 @@ pub fn ReaderDecoder(comptime buffer_size: usize, comptime ReaderType: type) typ
                 self.start = 0;
             }
 
-            const len = try unicode.utf8ByteSequenceLength(self.buf[self.start]);
-            const available = self.end - self.start;
-            var codepoint: Context = .{
-                .off = self.base_offset + self.start,
-                .len = len,
-                .code = undefined,
-            };
+            const off = self.base_offset + self.start;
 
-            if (available >= len) {
-                const slice = self.buf[self.start..][0..len];
-                self.start += len;
+            var byte = self.buf[self.start];
+            self.start += 1;
 
-                codepoint.code = try unicode.utf8Decode(slice);
-            } else {
-                var buf: [4]u8 = undefined;
-                @memcpy(buf[0..available], self.buf[self.start..self.end]);
+            if (byte < 0x80) return .{ .off = off, .len = 1, .code = byte };
 
+            var class = classes[byte];
+            var state = transitions.get(.valid).get(class);
+
+            if (state == .invalid) return error.Utf8InvalidStartByte;
+            if (self.start >= self.end) {
                 self.base_offset += self.end;
                 self.end = try self.unbuffered_reader.read(&self.buf);
-                self.start = len - available;
-
-                if (self.end < self.start) return error.Utf8ExpectedContinuation;
-                @memcpy(buf[available..len], self.buf[0..self.start]);
-
-                const slice = buf[0..len];
-                codepoint.code = try unicode.utf8Decode(slice);
+                if (self.end == 0) return error.Utf8ExpectedContinuation;
+                self.start = 0;
             }
 
-            return codepoint;
+            var code: u21 = byte & masks.get(class);
+
+            byte = self.buf[self.start];
+            class = classes[byte];
+            state = transitions.get(state).get(class);
+            code = (byte & 0x3f) | (code << 6);
+            self.start += 1;
+
+            if (state == .valid) return .{ .off = off, .len = 2, .code = code };
+            if (state == .invalid) return error.Utf8ExpectedContinuation;
+            if (self.start >= self.end) {
+                self.base_offset += self.end;
+                self.end = try self.unbuffered_reader.read(&self.buf);
+                if (self.end == 0) return error.Utf8ExpectedContinuation;
+                self.start = 0;
+            }
+
+            byte = self.buf[self.start];
+            class = classes[byte];
+            state = transitions.get(state).get(class);
+            code = (byte & 0x3f) | (code << 6);
+            self.start += 1;
+
+            if (state == .valid) return .{ .off = off, .len = 3, .code = code };
+            if (state == .invalid) return error.InvalidUtf8;
+            if (self.start >= self.end) {
+                self.base_offset += self.end;
+                self.end = try self.unbuffered_reader.read(&self.buf);
+                if (self.end == 0) return error.Utf8ExpectedContinuation;
+                self.start = 0;
+            }
+
+            byte = self.buf[self.start];
+            class = classes[byte];
+            state = transitions.get(state).get(class);
+            code = (byte & 0x3f) | (code << 6);
+            self.start += 1;
+
+            if (state == .invalid) return error.InvalidUtf8;
+            assert(state == .valid);
+            return .{ .off = off, .len = 4, .code = code };
         }
 
         pub fn nextCode(self: *@This()) !?u21 {
@@ -223,3 +254,136 @@ test "ReaderDecoder" {
     }
     try std.testing.expectEqual(null, try decoder.codeIterator().next());
 }
+
+const Class = enum(u4) {
+    /// 0x00 - 0x7f
+    ascii,
+
+    /// 0x80 - 0x8f
+    extention_low,
+    /// 0x90 - 0x9f
+    extention_mid,
+    /// 0xa0 - 0xbf
+    extention_high,
+
+    /// 0xc0 - 0xc1 | 0xf5 - 0xff
+    invalid,
+
+    /// 0xc2 - 0xdf
+    two_byte,
+
+    /// 0xe0
+    three_byte_overlong,
+    /// 0xe1 - 0xec | 0xee - 0xef
+    three_byte,
+    /// 0xed
+    three_byte_surrogate,
+
+    /// 0xf0
+    four_byte_overlong,
+    /// 0xf1 - 0xf3
+    four_byte,
+    /// 0xf4
+    four_byte_too_large,
+};
+
+const State = enum(u4) {
+    valid,
+    invalid,
+
+    one_more,
+    two_more,
+    three_more,
+
+    three_byte_overlong,
+    three_byte_surrogate,
+
+    four_byte_overlong,
+    four_byte_too_large,
+};
+
+const classes: [256]Class = blk: {
+    var c: [256]Class = .{.invalid} ** 256;
+
+    @memset(c[0x00..0x80], .ascii);
+
+    @memset(c[0x80..0x90], .extention_low);
+    @memset(c[0x90..0xa0], .extention_mid);
+    @memset(c[0xa0..0xc0], .extention_high);
+
+    @memset(c[0xc0..0xc2], .invalid);
+    @memset(c[0xc2..0xe0], .two_byte);
+
+    c[0xe0] = .three_byte_overlong;
+    @memset(c[0xe1..0xed], .three_byte);
+    c[0xed] = .three_byte_surrogate;
+    @memset(c[0xee..0xf0], .three_byte);
+
+    c[0xf0] = .four_byte_overlong;
+    @memset(c[0xf1..0xf4], .four_byte);
+    c[0xf4] = .four_byte_too_large;
+
+    @memset(c[0xf5..], .invalid);
+
+    break :blk c;
+};
+
+const masks: std.EnumArray(Class, u8) = .init(.{
+    .ascii = 0xff,
+
+    .extention_low = 0x3f,
+    .extention_mid = 0x3f,
+    .extention_high = 0x3f,
+
+    .invalid = 0x00,
+
+    .two_byte = 0x1f,
+
+    .three_byte_overlong = 0x0f,
+    .three_byte = 0x0f,
+    .three_byte_surrogate = 0x0f,
+
+    .four_byte_overlong = 0x07,
+    .four_byte = 0x07,
+    .four_byte_too_large = 0x07,
+});
+
+const transitions: std.EnumArray(State, std.EnumArray(Class, State)) = blk: {
+    var t: std.EnumArray(State, std.EnumArray(Class, State)) = .initFill(.initFill(.invalid));
+
+    t.getPtr(.valid).set(.ascii, State.valid);
+
+    t.getPtr(.valid).set(.two_byte, State.one_more);
+
+    t.getPtr(.valid).set(.three_byte, State.two_more);
+    t.getPtr(.valid).set(.three_byte_overlong, State.three_byte_overlong);
+    t.getPtr(.valid).set(.three_byte_surrogate, State.three_byte_surrogate);
+
+    t.getPtr(.valid).set(.four_byte, State.three_more);
+    t.getPtr(.valid).set(.four_byte_overlong, State.four_byte_overlong);
+    t.getPtr(.valid).set(.four_byte_too_large, State.four_byte_too_large);
+
+    t.getPtr(.one_more).set(.extention_low, State.valid);
+    t.getPtr(.one_more).set(.extention_mid, State.valid);
+    t.getPtr(.one_more).set(.extention_high, State.valid);
+
+    t.getPtr(.two_more).set(.extention_low, State.one_more);
+    t.getPtr(.two_more).set(.extention_mid, State.one_more);
+    t.getPtr(.two_more).set(.extention_high, State.one_more);
+
+    t.getPtr(.three_more).set(.extention_low, State.two_more);
+    t.getPtr(.three_more).set(.extention_mid, State.two_more);
+    t.getPtr(.three_more).set(.extention_high, State.two_more);
+
+    t.getPtr(.three_byte_overlong).set(.extention_high, State.one_more);
+
+    t.getPtr(.three_byte_surrogate).set(.extention_low, State.one_more);
+    t.getPtr(.three_byte_surrogate).set(.extention_mid, State.one_more);
+
+    t.getPtr(.four_byte_overlong).set(.extention_mid, State.two_more);
+    t.getPtr(.four_byte_overlong).set(.extention_high, State.two_more);
+
+    t.getPtr(.four_byte_too_large).set(.extention_low, State.two_more);
+
+    break :blk t;
+};
