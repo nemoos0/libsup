@@ -3,16 +3,16 @@ const unicode = std.unicode;
 
 const assert = std.debug.assert;
 
-pub const ContextIterator = struct {
+pub const FatIterator = struct {
     context: *anyopaque,
-    nextFn: *const fn (*anyopaque) anyerror!?Context,
+    nextFn: *const fn (*anyopaque) anyerror!?Fat,
 
-    pub fn next(iter: ContextIterator) anyerror!?Context {
+    pub fn next(iter: FatIterator) anyerror!?Fat {
         return iter.nextFn(iter.context);
     }
 };
 
-pub const Context = struct {
+pub const Fat = struct {
     code: u21,
     off: usize,
     len: u3,
@@ -54,7 +54,7 @@ pub const Utf8Decoder = struct {
         return .{ .bytes = bytes };
     }
 
-    pub fn nextContext(utf8: *Utf8Decoder) ?Context {
+    pub fn nextFat(utf8: *Utf8Decoder) ?Fat {
         if (utf8.pos >= utf8.bytes.len) return null;
 
         const first_byte = utf8.bytes[utf8.pos];
@@ -66,7 +66,7 @@ pub const Utf8Decoder = struct {
             .code = first_byte,
         };
 
-        var context: Context = .{
+        var fat: Fat = .{
             .off = utf8.pos - 1,
             .len = undefined,
             .code = undefined,
@@ -81,31 +81,31 @@ pub const Utf8Decoder = struct {
                     else => unreachable,
                 };
 
-                context.len = len;
-                context.code = first_byte & mask;
+                fat.len = len;
+                fat.code = first_byte & mask;
 
                 inline for (1..len) |_| {
-                    context.code = (utf8.bytes[utf8.pos] & 0x3f) | (context.code << 6);
+                    fat.code = (utf8.bytes[utf8.pos] & 0x3f) | (fat.code << 6);
                     utf8.pos += 1;
                 }
 
-                return context;
+                return fat;
             },
             else => unreachable,
         }
     }
 
     pub fn nextCode(utf8: *Utf8Decoder) ?u21 {
-        return if (utf8.nextContext()) |ctx| ctx.code else null;
+        return if (utf8.nextFat()) |ctx| ctx.code else null;
     }
 
-    pub fn contextIterator(utf8: *Utf8Decoder) ContextIterator {
-        return .{ .context = utf8, .nextFn = typeErasedNextContext };
+    pub fn fatIterator(utf8: *Utf8Decoder) FatIterator {
+        return .{ .context = utf8, .nextFn = typeErasedNextFat };
     }
 
-    fn typeErasedNextContext(ptr: *anyopaque) error{}!?Context {
+    fn typeErasedNextFat(ptr: *anyopaque) error{}!?Fat {
         const utf8: *Utf8Decoder = @alignCast(@ptrCast(ptr));
-        return utf8.nextContext();
+        return utf8.nextFat();
     }
 
     pub fn codeIterator(utf8: *Utf8Decoder) CodeIterator {
@@ -148,7 +148,7 @@ pub fn ReaderDecoder(comptime buffer_size: usize, comptime ReaderType: type) typ
         const Self = @This();
 
         /// https://bjoern.hoehrmann.de/utf-8/decoder/dfa
-        pub fn nextContext(self: *Self) !?Context {
+        pub fn nextFat(self: *Self) !?Fat {
             if (self.start >= self.end) {
                 self.base_offset += self.end;
                 self.end = try self.unbuffered_reader.read(&self.buf);
@@ -218,16 +218,16 @@ pub fn ReaderDecoder(comptime buffer_size: usize, comptime ReaderType: type) typ
         }
 
         pub fn nextCode(self: *@This()) !?u21 {
-            return if (try self.nextContext()) |ctx| ctx.code else null;
+            return if (try self.nextFat()) |ctx| ctx.code else null;
         }
 
-        pub fn contextIterator(self: *@This()) ContextIterator {
-            return .{ .context = self, .nextFn = typeErasedNextContext };
+        pub fn fatIterator(self: *@This()) FatIterator {
+            return .{ .context = self, .nextFn = typeErasedNextFat };
         }
 
-        fn typeErasedNextContext(ptr: *anyopaque) !?Context {
+        fn typeErasedNextFat(ptr: *anyopaque) !?Fat {
             const self: *@This() = @alignCast(@ptrCast(ptr));
-            return self.nextContext();
+            return self.nextFat();
         }
 
         pub fn codeIterator(self: *@This()) CodeIterator {

@@ -3,10 +3,10 @@ const enc = @import("encodings");
 const grapheme_table = @import("grapheme_table");
 
 pub const Iterator = struct {
-    source: enc.ContextIterator,
-    codepoints: [2]?enc.Context = .{ null, null },
+    source: enc.FatIterator,
+    codepoints: [2]?enc.Fat = .{ null, null },
 
-    pub fn init(source: enc.ContextIterator) !Iterator {
+    pub fn init(source: enc.FatIterator) !Iterator {
         var iter: Iterator = .{ .source = source };
         try iter.advance();
         return iter;
@@ -222,7 +222,7 @@ test "Iterator" {
     const input = "Hello";
 
     var utf8: enc.Utf8Decoder = .{ .bytes = input };
-    var graph: Iterator = try .init(utf8.contextIterator());
+    var graph: Iterator = try .init(utf8.fatIterator());
 
     for (1..6) |expected| {
         try std.testing.expectEqualDeep(expected, try graph.next());
@@ -265,7 +265,7 @@ test "conformance" {
         }
 
         var utf8: enc.Utf8Decoder = .{ .bytes = string.items };
-        var graph: Iterator = try .init(utf8.contextIterator());
+        var graph: Iterator = try .init(utf8.fatIterator());
 
         for (graphemes.items) |expected| {
             std.testing.expectEqualDeep(expected, try graph.next()) catch |err| {
