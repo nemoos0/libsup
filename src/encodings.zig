@@ -131,6 +131,98 @@ test "Utf8Decoder" {
     try std.testing.expectEqual(null, try decoder.codeIterator().next());
 }
 
+pub const Utf8Encoder = struct {
+    source: CodeIterator,
+    buffer: std.BoundedArray(u8, 4) = .{},
+
+    pub const Reader = std.io.Reader(*Utf8Encoder, anyerror, read);
+
+    pub fn read(encoder: *Utf8Encoder, dest: []u8) !usize {
+        var pos: usize = 0;
+
+        while (pos < dest.len) : (pos += 1) {
+            const byte = encoder.buffer.pop() orelse break;
+            dest[pos] = byte;
+        } else return pos;
+
+        while (pos + 4 < dest.len) {
+            const code = try encoder.source.next() orelse return pos;
+
+            const len = try unicode.utf8Encode(code, dest[pos..]);
+            pos += len;
+        }
+
+        while (pos < dest.len) {
+            const code = try encoder.source.next() orelse return pos;
+
+            var buf: [4]u8 = undefined;
+            var len = try unicode.utf8Encode(code, &buf);
+
+            const available = @min(len, dest.len - pos);
+            @memcpy(dest[pos..][0..available], buf[0..available]);
+            pos += available;
+
+            while (len > available) {
+                len -= 1;
+                encoder.buffer.appendAssumeCapacity(buf[len]);
+            }
+        }
+
+        return pos;
+    }
+
+    pub fn reader(encoder: *Utf8Encoder) Reader {
+        return .{ .context = encoder };
+    }
+
+    pub fn pump(encoder: Utf8Encoder, writer: anytype) !void {
+        while (try encoder.source.next()) |code| {
+            assert(code < 0x110000);
+
+            if (code < 1 << 7) {
+                try writer.writeByte(@intCast(code));
+            } else if (code < 1 << 11) {
+                try writer.writeByte(@intCast((code >> 6) | 0xc0));
+                try writer.writeByte(@intCast(code & 0x3f | 0x80));
+            } else if (code < 1 << 16) {
+                try writer.writeByte(@intCast((code >> 12) | 0xe0));
+                try writer.writeByte(@intCast((code >> 6) & 0x3f | 0x80));
+                try writer.writeByte(@intCast(code & 0x3f | 0x80));
+            } else {
+                try writer.writeByte(@intCast((code >> 18) | 0xf0));
+                try writer.writeByte(@intCast((code >> 12) & 0x3f | 0x80));
+                try writer.writeByte(@intCast((code >> 6) & 0x3f | 0x80));
+                try writer.writeByte(@intCast(code & 0x3f | 0x80));
+            }
+        }
+    }
+};
+
+test "Utf8Encoder.pump" {
+    const string = "ábç 퀀 😀";
+    var decoder: Utf8Decoder = try .init(string);
+    var encoder: Utf8Encoder = .{ .source = decoder.codeIterator() };
+
+    var output: std.ArrayList(u8) = .init(std.testing.allocator);
+    defer output.deinit();
+
+    try encoder.pump(output.writer());
+    try std.testing.expectEqualStrings(string, output.items);
+}
+
+test "Utf8Encoder.reader" {
+    const string = "ábç 퀀 😀";
+    var decoder: Utf8Decoder = try .init(string);
+    var encoder: Utf8Encoder = .{ .source = decoder.codeIterator() };
+
+    var output: std.ArrayList(u8) = .init(std.testing.allocator);
+    defer output.deinit();
+
+    var fifo: std.fifo.LinearFifo(u8, .{ .Static = 1 }) = .init();
+    try fifo.pump(encoder.reader(), output.writer());
+    try std.testing.expectEqualStrings(string, output.items);
+}
+
 pub fn readerDecoder(reader: anytype) ReaderDecoder(4096, @TypeOf(reader)) {
     return .{ .unbuffered_reader = reader };
 }
