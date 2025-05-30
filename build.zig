@@ -6,6 +6,19 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run unit test");
 
+    const validate_mod = b.createModule(.{
+        .root_source_file = b.path("src/validate.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    test_step.dependOn(&b.addRunArtifact(
+        b.addTest(.{
+            .name = "validate_test",
+            .root_module = validate_mod,
+        }),
+    ).step);
+
     const encodings_mod = b.createModule(.{
         .root_source_file = b.path("src/encodings.zig"),
         .target = target,
