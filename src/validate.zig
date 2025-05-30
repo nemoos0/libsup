@@ -19,8 +19,11 @@ pub fn main() !void {
     const input = try stdin.readToEndAlloc(gpa, std.math.maxInt(usize));
     defer gpa.free(input);
 
-    if (std.unicode.utf8ValidateSlice(input) != validateUtf8(input)) {
-        return error.InvalidSlice;
+    for (0..input.len) |len| {
+        if (std.unicode.utf8ValidateSlice(input[0..len]) != validateUtf8(input[0..len])) {
+            std.debug.print("{}\n", .{len});
+            return error.InvalidSlice;
+        }
     }
 }
 
@@ -83,19 +86,26 @@ pub fn validateUtf8(slice: []const u8) bool {
 
         const continue_mask: Chunk = @splat(@as(u8, @bitCast(Invalid2Byte{ .continuation = true })));
 
-        if (@reduce(.Or, flags != @as(Chunk, @splat(0)))) {
-            if (@reduce(.Or, flags & ~continue_mask != @as(Chunk, @splat(0)))) return false;
+        if (@reduce(.Or, flags & ~continue_mask != @as(Chunk, @splat(0)))) return false;
 
-            const expected_continue: Chunk = checkContinuation(len, lookback, chunk);
-            const exected_flags = expected_continue * continue_mask;
+        const expected_continue: Chunk = checkContinuation(len, lookback, chunk);
+        const exected_flags = expected_continue * continue_mask;
 
-            if (@reduce(.Or, exected_flags != flags)) return false;
-        }
+        if (@reduce(.Or, exected_flags != flags)) return false;
     }
 
     const end_mask: Chunk = .{0xff} ** (len - 3) ++ .{0xf0} ++ .{0xe0} ++ .{0xc0};
+    const tail = blk: {
+        if (slice.len >= len) {
+            break :blk slice[slice.len - len ..][0..len].*;
+        } else {
+            var buf: [len]u8 = .{0} ** len;
+            @memcpy(buf[len - slice.len ..], slice);
+            break :blk buf;
+        }
+    };
 
-    return @reduce(.And, lookback < end_mask);
+    return @reduce(.And, tail < end_mask);
 }
 
 /// https://github.com/ziglang/zig/issues/12815
