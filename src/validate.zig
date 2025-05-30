@@ -55,10 +55,6 @@ pub fn validateUtf8(slice: []const u8) bool {
         const nibble_low = shift & @as(Chunk, @splat(0xf));
         const nibble_next = chunk >> @splat(4);
 
-        // const flags_high = @shuffle(u8, lookup_high, undefined, nibble_high);
-        // const flags_low = @shuffle(u8, lookup_low, undefined, nibble_low);
-        // const flags_next = @shuffle(u8, lookup_next, undefined, nibble_next);
-
         const lookup_high_padded: Chunk = std.simd.repeat(len, lookup_high);
         // BUG: this function is for x86_64 only
         const flags_high = mm_shuffle_epi8(len, lookup_high_padded, nibble_high);
