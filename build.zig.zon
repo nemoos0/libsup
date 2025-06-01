@@ -1,5 +1,5 @@
 .{
-    .name = .sup,
+    .name = .libsup,
     .version = "0.0.0",
     .fingerprint = 0xabbbf3943e4a912b, // Changing this has security and trust implications.
     .minimum_zig_version = "0.14.0",
