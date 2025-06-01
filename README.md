@@ -4,7 +4,8 @@ libsup wants to be a Streaming Unicode Processing library.
 It allows to handle Unicode data regardless of the data structure in which it
 is stored, whether it is a slice, gap buffer, rope or piece table.
 
-This project is currently under active development and its usage is not recommended.
+> [!WARNING]
+> This project is currently under active development and its usage is not recommended.
 
 ### Overview
 
