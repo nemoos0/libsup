@@ -8,7 +8,7 @@ const assert = std.debug.assert;
 const VLEN = std.simd.suggestVectorLength(u8) orelse 1;
 const Chunk = @Vector(VLEN, u8);
 
-pub const Utf8Decoder = struct {
+pub const Decoder = struct {
     bytes: []const u8,
     pos: usize = 0,
 
@@ -27,7 +27,7 @@ pub const Utf8Decoder = struct {
         break :blk t;
     };
 
-    pub fn init(bytes: []const u8) !Utf8Decoder {
+    pub fn init(bytes: []const u8) !Decoder {
         if (!validate(bytes)) {
             return error.InvalidUtf8;
         }
@@ -35,7 +35,7 @@ pub const Utf8Decoder = struct {
         return .{ .bytes = bytes };
     }
 
-    pub fn nextFat(utf8: *Utf8Decoder) ?code_point.Fat {
+    pub fn nextFat(utf8: *Decoder) ?code_point.Fat {
         if (utf8.pos >= utf8.bytes.len) return null;
 
         const first_byte = utf8.bytes[utf8.pos];
@@ -76,32 +76,32 @@ pub const Utf8Decoder = struct {
         }
     }
 
-    pub fn nextCode(utf8: *Utf8Decoder) ?u21 {
+    pub fn nextCode(utf8: *Decoder) ?u21 {
         return if (utf8.nextFat()) |ctx| ctx.code else null;
     }
 
-    pub fn fatIterator(utf8: *Utf8Decoder) code_point.FatIterator {
+    pub fn fatIterator(utf8: *Decoder) code_point.FatIterator {
         return .{ .context = utf8, .nextFn = typeErasedNextFat };
     }
 
     fn typeErasedNextFat(ptr: *anyopaque) error{}!?code_point.Fat {
-        const utf8: *Utf8Decoder = @alignCast(@ptrCast(ptr));
+        const utf8: *Decoder = @alignCast(@ptrCast(ptr));
         return utf8.nextFat();
     }
 
-    pub fn codeIterator(utf8: *Utf8Decoder) code_point.CodeIterator {
+    pub fn codeIterator(utf8: *Decoder) code_point.Iterator {
         return .{ .context = utf8, .nextFn = typeErasedNextCode };
     }
 
     fn typeErasedNextCode(ptr: *anyopaque) error{}!?u21 {
-        const utf8: *Utf8Decoder = @alignCast(@ptrCast(ptr));
+        const utf8: *Decoder = @alignCast(@ptrCast(ptr));
         return utf8.nextCode();
     }
 };
 
-test "Utf8Decoder" {
+test "Decoder" {
     const string = "ábç 퀀 😀";
-    var decoder: Utf8Decoder = try .init(string);
+    var decoder: Decoder = try .init(string);
 
     const view = try unicode.Utf8View.init(string);
     var iter = view.iterator();
@@ -112,13 +112,13 @@ test "Utf8Decoder" {
     try std.testing.expectEqual(null, try decoder.codeIterator().next());
 }
 
-pub const Utf8Encoder = struct {
-    source: code_point.CodeIterator,
+pub const Encoder = struct {
+    source: code_point.Iterator,
     buffer: std.BoundedArray(u8, 4) = .{},
 
-    pub const Reader = std.io.Reader(*Utf8Encoder, anyerror, read);
+    pub const Reader = std.io.Reader(*Encoder, anyerror, read);
 
-    pub fn read(encoder: *Utf8Encoder, dest: []u8) !usize {
+    pub fn read(encoder: *Encoder, dest: []u8) !usize {
         var pos: usize = 0;
 
         while (pos < dest.len) : (pos += 1) {
@@ -152,11 +152,11 @@ pub const Utf8Encoder = struct {
         return pos;
     }
 
-    pub fn reader(encoder: *Utf8Encoder) Reader {
+    pub fn reader(encoder: *Encoder) Reader {
         return .{ .context = encoder };
     }
 
-    pub fn pump(encoder: Utf8Encoder, writer: anytype) !void {
+    pub fn pump(encoder: Encoder, writer: anytype) !void {
         while (try encoder.source.next()) |code| {
             assert(code < 0x110000);
 
@@ -179,10 +179,10 @@ pub const Utf8Encoder = struct {
     }
 };
 
-test "Utf8Encoder.pump" {
+test "Encoder.pump" {
     const string = "ábç 퀀 😀";
-    var decoder: Utf8Decoder = try .init(string);
-    var encoder: Utf8Encoder = .{ .source = decoder.codeIterator() };
+    var decoder: Decoder = try .init(string);
+    var encoder: Encoder = .{ .source = decoder.codeIterator() };
 
     var output: std.ArrayList(u8) = .init(std.testing.allocator);
     defer output.deinit();
@@ -191,10 +191,10 @@ test "Utf8Encoder.pump" {
     try std.testing.expectEqualStrings(string, output.items);
 }
 
-test "Utf8Encoder.reader" {
+test "Encoder.reader" {
     const string = "ábç 퀀 😀";
-    var decoder: Utf8Decoder = try .init(string);
-    var encoder: Utf8Encoder = .{ .source = decoder.codeIterator() };
+    var decoder: Decoder = try .init(string);
+    var encoder: Encoder = .{ .source = decoder.codeIterator() };
 
     var output: std.ArrayList(u8) = .init(std.testing.allocator);
     defer output.deinit();
@@ -303,7 +303,7 @@ pub fn ReaderDecoder(comptime buffer_size: usize, comptime ReaderType: type) typ
             return self.nextFat();
         }
 
-        pub fn codeIterator(self: *@This()) code_point.CodeIterator {
+        pub fn codeIterator(self: *@This()) code_point.Iterator {
             return .{ .context = self, .nextFn = typeErasedNextCode };
         }
 

@@ -222,7 +222,7 @@ const BreakCondition = enum {
 test "Iterator" {
     const input = "Hello";
 
-    var decoder: utf8.Utf8Decoder = .{ .bytes = input };
+    var decoder: utf8.Decoder = .{ .bytes = input };
     var graph: Iterator = try .init(decoder.fatIterator());
 
     for (1..6) |expected| {
@@ -265,7 +265,7 @@ test "conformance" {
             try graphemes.append(arena, string.items.len);
         }
 
-        var decoder: utf8.Utf8Decoder = .{ .bytes = string.items };
+        var decoder: utf8.Decoder = .{ .bytes = string.items };
         var graph: Iterator = try .init(decoder.fatIterator());
 
         for (graphemes.items) |expected| {

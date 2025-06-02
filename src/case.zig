@@ -8,7 +8,7 @@ const folding_table = @import("case_folding_table");
 pub const CaseProps = props_table.CaseProps;
 
 pub const FullFold = struct {
-    source: code_point.CodeIterator,
+    source: code_point.Iterator,
     codes: []const u21 = &.{},
     pos: u8 = 0,
 
@@ -31,7 +31,7 @@ pub const FullFold = struct {
         return null;
     }
 
-    pub fn iterator(norm: *FullFold) code_point.CodeIterator {
+    pub fn iterator(norm: *FullFold) code_point.Iterator {
         return .{ .context = norm, .nextFn = typeErasedNext };
     }
 
@@ -45,7 +45,7 @@ test "FullFold" {
     const utf8 = @import("utf8");
 
     const input = "HeLlo!";
-    var decoder: utf8.Utf8Decoder = .{ .bytes = input };
+    var decoder: utf8.Decoder = .{ .bytes = input };
     var fold: FullFold = .{ .source = decoder.codeIterator() };
 
     const expected = "hello!";
@@ -63,7 +63,7 @@ test "FullFold" {
 }
 
 pub const SimpleFold = struct {
-    source: code_point.CodeIterator,
+    source: code_point.Iterator,
 
     pub fn next(fold: SimpleFold) !?u21 {
         if (try fold.source.next()) |code| {
@@ -73,7 +73,7 @@ pub const SimpleFold = struct {
         return null;
     }
 
-    pub fn iterator(norm: *SimpleFold) code_point.CodeIterator {
+    pub fn iterator(norm: *SimpleFold) code_point.Iterator {
         return .{ .context = norm, .nextFn = typeErasedNext };
     }
 
@@ -87,7 +87,7 @@ test "SimpleFold" {
     const utf8 = @import("utf8");
 
     const input = "HeLlo!";
-    var decoder: utf8.Utf8Decoder = .{ .bytes = input };
+    var decoder: utf8.Decoder = .{ .bytes = input };
     var fold: SimpleFold = .{ .source = decoder.codeIterator() };
 
     const expected = "hello!";
