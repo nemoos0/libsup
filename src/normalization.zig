@@ -1,5 +1,5 @@
 const std = @import("std");
-const enc = @import("encodings");
+const code_point = @import("code_point");
 
 const qc_table = @import("quick_check_table");
 const ccc_table = @import("combining_class_table");
@@ -22,7 +22,7 @@ pub const Form = packed struct(u2) {
 pub fn Normalizer(comptime form: Form) type {
     return struct {
         gpa: Allocator,
-        source: enc.CodeIterator,
+        source: code_point.CodeIterator,
         codes: ArrayListUnmanaged(u21),
         classes: ArrayListUnmanaged(u8),
         /// Number of codes already sorted
@@ -53,7 +53,7 @@ pub fn Normalizer(comptime form: Form) type {
         ///
         /// UAX #15 section 13 Stream-Safe Text Format
         /// https://www.unicode.org/reports/tr15/#UAX15-D3
-        pub fn init(gpa: Allocator, source: enc.CodeIterator) Allocator.Error!Self {
+        pub fn init(gpa: Allocator, source: code_point.CodeIterator) Allocator.Error!Self {
             return .{
                 .gpa = gpa,
                 .source = source,
@@ -99,7 +99,7 @@ pub fn Normalizer(comptime form: Form) type {
             return norm.codes.items[0];
         }
 
-        pub fn iterator(norm: *Self) enc.CodeIterator {
+        pub fn iterator(norm: *Self) code_point.CodeIterator {
             return .{ .context = norm, .nextFn = typeErasedNext };
         }
 
@@ -255,13 +255,13 @@ fn expectEqualForm(
     var buffer: [256]u8 = undefined;
     var fba: std.heap.FixedBufferAllocator = .init(&buffer);
 
-    var original_utf8: enc.Utf8Decoder = .{ .bytes = original };
+    var original_utf8: code_point.Utf8Decoder = .{ .bytes = original };
     var norm: Normalizer(form) = try .init(
         fba.allocator(),
         original_utf8.codeIterator(),
     );
 
-    var expected_utf8: enc.Utf8Decoder = .{ .bytes = expected };
+    var expected_utf8: code_point.Utf8Decoder = .{ .bytes = expected };
 
     while (expected_utf8.nextCode()) |expected_code| {
         const actual_code = try norm.next();

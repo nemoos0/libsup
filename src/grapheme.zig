@@ -1,12 +1,12 @@
 const std = @import("std");
-const enc = @import("encodings");
+const code_point = @import("code_point");
 const grapheme_table = @import("grapheme_table");
 
 pub const Iterator = struct {
-    source: enc.FatIterator,
-    codepoints: [2]?enc.Fat = .{ null, null },
+    source: code_point.FatIterator,
+    codepoints: [2]?code_point.Fat = .{ null, null },
 
-    pub fn init(source: enc.FatIterator) !Iterator {
+    pub fn init(source: code_point.FatIterator) !Iterator {
         var iter: Iterator = .{ .source = source };
         try iter.advance();
         return iter;
@@ -221,7 +221,7 @@ const BreakCondition = enum {
 test "Iterator" {
     const input = "Hello";
 
-    var utf8: enc.Utf8Decoder = .{ .bytes = input };
+    var utf8: code_point.Utf8Decoder = .{ .bytes = input };
     var graph: Iterator = try .init(utf8.fatIterator());
 
     for (1..6) |expected| {
@@ -264,7 +264,7 @@ test "conformance" {
             try graphemes.append(arena, string.items.len);
         }
 
-        var utf8: enc.Utf8Decoder = .{ .bytes = string.items };
+        var utf8: code_point.Utf8Decoder = .{ .bytes = string.items };
         var graph: Iterator = try .init(utf8.fatIterator());
 
         for (graphemes.items) |expected| {

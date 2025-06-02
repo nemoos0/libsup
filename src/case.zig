@@ -1,5 +1,5 @@
 const std = @import("std");
-const enc = @import("encodings");
+const code_point = @import("code_point");
 
 const props_table = @import("case_props_table");
 const mapping_table = @import("case_mapping_table");
@@ -8,7 +8,7 @@ const folding_table = @import("case_folding_table");
 pub const CaseProps = props_table.CaseProps;
 
 pub const FullFold = struct {
-    source: enc.CodeIterator,
+    source: code_point.CodeIterator,
     codes: []const u21 = &.{},
     pos: u8 = 0,
 
@@ -31,7 +31,7 @@ pub const FullFold = struct {
         return null;
     }
 
-    pub fn iterator(norm: *FullFold) enc.CodeIterator {
+    pub fn iterator(norm: *FullFold) code_point.CodeIterator {
         return .{ .context = norm, .nextFn = typeErasedNext };
     }
 
@@ -43,7 +43,7 @@ pub const FullFold = struct {
 
 test "FullFold" {
     const input = "HeLlo!";
-    var utf8: enc.Utf8Decoder = .{ .bytes = input };
+    var utf8: code_point.Utf8Decoder = .{ .bytes = input };
     var fold: FullFold = .{ .source = utf8.codeIterator() };
 
     const expected = "hello!";
@@ -61,7 +61,7 @@ test "FullFold" {
 }
 
 pub const SimpleFold = struct {
-    source: enc.CodeIterator,
+    source: code_point.CodeIterator,
 
     pub fn next(fold: SimpleFold) !?u21 {
         if (try fold.source.next()) |code| {
@@ -71,7 +71,7 @@ pub const SimpleFold = struct {
         return null;
     }
 
-    pub fn iterator(norm: *SimpleFold) enc.CodeIterator {
+    pub fn iterator(norm: *SimpleFold) code_point.CodeIterator {
         return .{ .context = norm, .nextFn = typeErasedNext };
     }
 
@@ -83,7 +83,7 @@ pub const SimpleFold = struct {
 
 test "SimpleFold" {
     const input = "HeLlo!";
-    var utf8: enc.Utf8Decoder = .{ .bytes = input };
+    var utf8: code_point.Utf8Decoder = .{ .bytes = input };
     var fold: SimpleFold = .{ .source = utf8.codeIterator() };
 
     const expected = "hello!";
