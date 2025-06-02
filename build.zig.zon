@@ -1,7 +1,7 @@
 .{
     .name = .libsup,
     .version = "0.0.0",
-    .fingerprint = 0xabbbf3943e4a912b, // Changing this has security and trust implications.
+    .fingerprint = 0x9f036eb0a91d8ed2, // Changing this has security and trust implications.
     .minimum_zig_version = "0.14.0",
     .paths = .{
         "build.zig",
