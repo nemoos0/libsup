@@ -6,19 +6,6 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run unit test");
 
-    const utf8_mod = b.createModule(.{
-        .root_source_file = b.path("src/utf8.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-
-    test_step.dependOn(&b.addRunArtifact(
-        b.addTest(.{
-            .name = "utf8_test",
-            .root_module = utf8_mod,
-        }),
-    ).step);
-
     const code_point_mod = b.createModule(.{
         .root_source_file = b.path("src/code_point.zig"),
         .target = target,
@@ -29,6 +16,20 @@ pub fn build(b: *std.Build) void {
         b.addTest(.{
             .name = "code_point_test",
             .root_module = code_point_mod,
+        }),
+    ).step);
+
+    const utf8_mod = b.createModule(.{
+        .root_source_file = b.path("src/utf8.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    utf8_mod.addImport("code_point", code_point_mod);
+
+    test_step.dependOn(&b.addRunArtifact(
+        b.addTest(.{
+            .name = "utf8_test",
+            .root_module = utf8_mod,
         }),
     ).step);
 
@@ -76,6 +77,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     grapheme_mod.addImport("code_point", code_point_mod);
+    grapheme_mod.addImport("utf8", utf8_mod);
     grapheme_mod.addAnonymousImport("grapheme_table", .{
         .root_source_file = grapheme_table,
     });
@@ -137,6 +139,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     normalization_mod.addImport("code_point", code_point_mod);
+    normalization_mod.addImport("utf8", utf8_mod);
     normalization_mod.addAnonymousImport("combining_class_table", .{ .root_source_file = combining_class_table });
     normalization_mod.addAnonymousImport("decomposition_table", .{ .root_source_file = decomposition_table });
     normalization_mod.addAnonymousImport("composition_table", .{ .root_source_file = composition_table });
@@ -188,6 +191,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     case_mod.addImport("code_point", code_point_mod);
+    case_mod.addImport("utf8", utf8_mod);
     case_mod.addAnonymousImport("case_props_table", .{ .root_source_file = case_props_table });
     case_mod.addAnonymousImport("case_mapping_table", .{ .root_source_file = case_mapping_table });
     case_mod.addAnonymousImport("case_folding_table", .{ .root_source_file = case_folding_table });

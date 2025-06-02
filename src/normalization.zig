@@ -252,16 +252,18 @@ fn expectEqualForm(
     expected: []const u8,
     comptime form: Form,
 ) !void {
+    const utf8 = @import("utf8");
+
     var buffer: [256]u8 = undefined;
     var fba: std.heap.FixedBufferAllocator = .init(&buffer);
 
-    var original_utf8: code_point.Utf8Decoder = .{ .bytes = original };
+    var original_utf8: utf8.Utf8Decoder = .{ .bytes = original };
     var norm: Normalizer(form) = try .init(
         fba.allocator(),
         original_utf8.codeIterator(),
     );
 
-    var expected_utf8: code_point.Utf8Decoder = .{ .bytes = expected };
+    var expected_utf8: utf8.Utf8Decoder = .{ .bytes = expected };
 
     while (expected_utf8.nextCode()) |expected_code| {
         const actual_code = try norm.next();

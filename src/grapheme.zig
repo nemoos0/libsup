@@ -1,4 +1,5 @@
 const std = @import("std");
+const utf8 = @import("utf8");
 const code_point = @import("code_point");
 const grapheme_table = @import("grapheme_table");
 
@@ -221,8 +222,8 @@ const BreakCondition = enum {
 test "Iterator" {
     const input = "Hello";
 
-    var utf8: code_point.Utf8Decoder = .{ .bytes = input };
-    var graph: Iterator = try .init(utf8.fatIterator());
+    var decoder: utf8.Utf8Decoder = .{ .bytes = input };
+    var graph: Iterator = try .init(decoder.fatIterator());
 
     for (1..6) |expected| {
         try std.testing.expectEqualDeep(expected, try graph.next());
@@ -264,8 +265,8 @@ test "conformance" {
             try graphemes.append(arena, string.items.len);
         }
 
-        var utf8: code_point.Utf8Decoder = .{ .bytes = string.items };
-        var graph: Iterator = try .init(utf8.fatIterator());
+        var decoder: utf8.Utf8Decoder = .{ .bytes = string.items };
+        var graph: Iterator = try .init(decoder.fatIterator());
 
         for (graphemes.items) |expected| {
             std.testing.expectEqualDeep(expected, try graph.next()) catch |err| {

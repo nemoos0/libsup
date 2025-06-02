@@ -42,9 +42,11 @@ pub const FullFold = struct {
 };
 
 test "FullFold" {
+    const utf8 = @import("utf8");
+
     const input = "HeLlo!";
-    var utf8: code_point.Utf8Decoder = .{ .bytes = input };
-    var fold: FullFold = .{ .source = utf8.codeIterator() };
+    var decoder: utf8.Utf8Decoder = .{ .bytes = input };
+    var fold: FullFold = .{ .source = decoder.codeIterator() };
 
     const expected = "hello!";
     var pos: usize = 0;
@@ -82,9 +84,11 @@ pub const SimpleFold = struct {
 };
 
 test "SimpleFold" {
+    const utf8 = @import("utf8");
+
     const input = "HeLlo!";
-    var utf8: code_point.Utf8Decoder = .{ .bytes = input };
-    var fold: SimpleFold = .{ .source = utf8.codeIterator() };
+    var decoder: utf8.Utf8Decoder = .{ .bytes = input };
+    var fold: SimpleFold = .{ .source = decoder.codeIterator() };
 
     const expected = "hello!";
     var pos: usize = 0;
