@@ -9,7 +9,7 @@ is stored, whether it is a slice, gap buffer, rope or piece table.
 
 ### Overview
 
-The core of the library are the two iterator interfaces `encodings.Iterator` and `encodings.FatIterator`.
+The core of the library are the interfaces `Iterator` and `FatIterator` from the `code_point` module.
 
 `Iterator` yields only the code point `u21` and it is used for any transformation
 algorithm like normalization and case folding.
@@ -35,8 +35,7 @@ the additional flexibility it provides.
 
 ### Features
 
-- slice/reader utf8 decoder
-- utf8 encoder
+- utf8 validation/encoding/decoding
 - grapheme segmentation
 - case mapping upper/lower/title (not supporting locale specific mappings yet)
 - case folding
@@ -53,8 +52,8 @@ Things listed here are in random order and might change any time:
 - line break algorithm
 - collation algorithm
 - handle special locale case mappings
-- make a fast path in nf*c normalization for qc_nf*c code points
-- make the simd utf8 validation available on aarch64/riscv64 (currently works only on x86_64)
+- make a fast path in nf\*c normalization for qc_nf\*c code points
+- make the simd utf8 validation better on aarch64/riscv64
 - benchmark the algorithms against zg and icu
 - add fuzz testing using icu as the oracle
 - utf8 to utf16 converter (with simd?) and vice versa
@@ -67,4 +66,5 @@ Sources that I used to learn how to do Unicode stuff:
 - Unicode Technical Reports https://www.unicode.org/reports/
 - zg https://codeberg.org/atman/zg
 - Validating UTF-8 In Less Than One Instruction Per Byte https://arxiv.org/abs/2010.03090
+    - Example implementation https://github.com/simdutf/simdutf
     - Nice SIMD explanation https://validark.dev/posts/eine-kleine-vectorized-classification/
