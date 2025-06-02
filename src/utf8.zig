@@ -451,6 +451,19 @@ pub fn validate(input: []const u8) bool {
     }
 }
 
+test "fuzz validate" {
+    const Context = struct {
+        pub fn testOne(_: @This(), input: []const u8) !void {
+            try std.testing.expectEqual(
+                unicode.utf8ValidateSlice(input),
+                validate(input),
+            );
+        }
+    };
+
+    try std.testing.fuzz(Context{}, Context.testOne, .{});
+}
+
 fn simdValidateSlice(prefix: Chunk, input: []const u8) bool {
     assert(input.len != 0);
     assert(input.len % VLEN == 0);
